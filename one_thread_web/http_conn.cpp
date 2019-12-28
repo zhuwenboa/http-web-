@@ -456,7 +456,7 @@ bool http_conn::write()
             return false;
         }
 
-        bytes_to_send -= temp;
+     //   bytes_to_send -= temp;
         bytes_have_send += temp;
         //响应发送完成
         if(bytes_to_send <= bytes_have_send)
