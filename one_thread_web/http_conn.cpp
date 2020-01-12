@@ -17,19 +17,21 @@ const char* doc_root = "/home/xuexi/unix-/linux-高性能/15";
 int setnonblocking(int fd)
 {
     int old_option = fcntl(fd, F_GETFL);
-    fcntl(fd, F_SETFL, old_option | O_NONBLOCK);
+    int ret = fcntl(fd, F_SETFL, old_option | O_NONBLOCK);
+    if(ret < 0)
+        std::cout << "fcntl erro  line is " << __LINE__ << std::endl; 
     return old_option;
 }
 
-void addfd(int epollfd, int fd, bool one_shot)
+void addfd(int epollfd, int fd)
 {
+    setnonblocking(fd);
     epoll_event event;
     event.data.fd = fd;
+    //event.events = EPOLLIN | EPOLLRDHUP;
     event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-    if(one_shot)
-        event.events |= EPOLLONESHOT;
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
-    setnonblocking(fd);
+    //setnonblocking(fd);
 }
 //关闭连接
 void removefd(int epollfd, int fd)
@@ -40,11 +42,13 @@ void removefd(int epollfd, int fd)
 
 //更换epollfd的事件集
 void modfd(int epollfd, int fd, int ev)
-{
+{    
     epoll_event event;
     event.data.fd = fd;
-    event.events = ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
-    epoll_ctl(epollfd, EPOLL_CTL_MOD, fd,  &event);
+    //event.events = ev | EPOLLET | EPOLLRDHUP;
+    event.events = ev | EPOLLRDHUP;
+    int ret = epoll_ctl(epollfd, EPOLL_CTL_MOD, fd,  &event);
+    //printf("modfd's return ret = %d\n", ret);
 }
 
 int http_conn::m_user_count = 0;
@@ -68,7 +72,7 @@ void http_conn::init(int sockfd, const sockaddr_in& addr)
     int reuse = 1;
     //用该函数避免time_wait状态
     setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)); //设置地址重用
-    addfd(m_epollfd, sockfd, true);
+    addfd(m_epollfd, sockfd);
     m_user_count++; //客户数量加1
 
     init();
@@ -456,7 +460,7 @@ bool http_conn::write()
             return false;
         }
 
-     //   bytes_to_send -= temp;
+     // bytes_to_send -= temp;
         bytes_have_send += temp;
         //响应发送完成
         if(bytes_to_send <= bytes_have_send)
@@ -472,7 +476,7 @@ bool http_conn::write()
             }
             else
             {
-                modfd(m_epollfd, m_sockfd, EPOLLIN);
+                //modfd(m_epollfd, m_sockfd, EPOLLIN);
                 //如果不持续连接，返回false，让主函数判断关闭该连接
                 return false;
             }            
@@ -641,44 +645,28 @@ bool http_conn::process_write(http_conn::HTTP_CODE ret)
     m_iv[0].iov_base = m_write_buf;
     m_iv[0].iov_len = m_write_idx;
     m_iv_count = 1;
-    //write();
     return true;
 }
 
 //由于线程池中的工作线程调用，这是处理HTTP请求的入口函数
 void http_conn::process()
 {
-
-    bool flag = read();
-    if(!flag)
-    {
-        close_conn();
-        return;
-    }
-
     HTTP_CODE read_ret = process_read();
     if(read_ret == NO_REQUEST)
     {
         modfd(m_epollfd, m_sockfd, EPOLLIN);
         return;
     }
-    std::cout << "process_read's read_ret = " << read_ret << "\n";   
+    //std::cout << "process_read's read_ret = " << read_ret << "\n";   
     bool write_ret = process_write(read_ret);
 
-    std::cout << "write_ret = " << write_ret << "\n";
-    std::cout << "响应内容： " << m_write_buf << "\n";
+    //std::cout << "write_ret = " << write_ret << "\n";
+    //std::cout << "响应内容： " << m_write_buf << "\n";
     if(!write_ret)
     {
         close_conn();
         std::cout << "关闭连接\n";
     }
-    /*
-    write();
-    if(!write())
-    {
-        close_conn();
-    }
-    */
     modfd(m_epollfd, m_sockfd, EPOLLOUT);
 }
 

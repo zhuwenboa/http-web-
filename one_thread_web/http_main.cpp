@@ -19,7 +19,7 @@
 #define MAX_EVENT_NUMBER 100000
 #define PORT 10086
 
-extern int addfd(int epollfd, int fd, bool one_shot);
+extern int addfd(int epollfd, int fd);
 extern int removefd(int epollfd, int fd);
 
 //信号处理函数
@@ -79,18 +79,20 @@ int main(int argc, char *argv[])
     ret = bind(listenfd, (sockaddr*)&serv_adr, sizeof(serv_adr));
     assert(ret >= 0);
 
-    ret = listen(listenfd, 5);
+    ret = listen(listenfd, SOMAXCONN);
     assert(ret >= 0);
 
     epoll_event events[MAX_EVENT_NUMBER];
     int epollfd = epoll_create(5);
     assert(epollfd != -1);
-    addfd(epollfd, listenfd, false);
+    addfd(epollfd, listenfd);
     http_conn::m_epollfd = epollfd;
 
     while(true)
     {
+        printf("-----\n");
         int cond = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
+        printf("=======\n");
         if((cond < 0) && (errno != EINTR))
         {
             printf("epoll failure\n");
@@ -104,21 +106,30 @@ int main(int argc, char *argv[])
             {
                 struct sockaddr_in cli_addr;
                 socklen_t cli_len = sizeof(cli_addr);
-                int connfd = accept(listenfd, (sockaddr*)&cli_addr, &cli_len);
-                printf("有新的连接%d到来\n", connfd);
-                if(connfd < 0)
+                //循环调用accpet，因为ET模式下当多个连接到达时只会触发一次listenfd可读事件
+                while(true)
                 {
-                    printf("errno is: %d\n", errno);
-                    continue;
+                    int connfd = accept(listenfd, (sockaddr*)&cli_addr, &cli_len);
+                    if(connfd < 0)
+                    {
+                        if(errno == EAGAIN || errno == EWOULDBLOCK)
+                            break;
+                        else 
+                        {
+                            printf("errno is: %d\n", errno);
+                            exit(1);
+                        }
+                    }
+                    printf("有新的连接%d到来\n", connfd);
+                    //超过最大连接上限
+                    if(http_conn::m_user_count >= MAX_FD)
+                    {
+                        show_error(connfd, "Internal server busy");
+                        continue;
+                    }
+                    //初始化客户连接
+                    users[connfd].init(connfd, cli_addr);
                 }
-                //超过最大连接上限
-                if(http_conn::m_user_count >= MAX_FD)
-                {
-                    show_error(connfd, "Internal server busy");
-                    continue;
-                }
-                //初始化客户连接
-                users[connfd].init(connfd, cli_addr);
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {
@@ -129,8 +140,8 @@ int main(int argc, char *argv[])
             else if(events[i].events & EPOLLIN)
             {
                 std::cout << "可读事件触发\n";
-                users[fd].process(); //改进之后效率提升明显
-                /*
+                //users[fd].process(); //改进之后效率提升明显
+                
                 //根据读的结果，决定是将任务添加到线程池，还是关闭连接
                 if(users[fd].read())
                 {
@@ -141,7 +152,7 @@ int main(int argc, char *argv[])
                 {
                     users[fd].close_conn();
                 }
-                */
+                
                 
             }
             //可写事件
@@ -162,6 +173,5 @@ int main(int argc, char *argv[])
     close(epollfd);
     close(listenfd);
     delete [] users;
-  //  delete pool;
     return 0;
 }
