@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     ret = bind(listenfd, (sockaddr*)&serv_adr, sizeof(serv_adr));
     assert(ret >= 0);
 
-    ret = listen(listenfd, 5);
+    ret = listen(listenfd, SOMAXCONN);
     assert(ret >= 0);
 
     epoll_event events[MAX_EVENT_NUMBER];
@@ -97,22 +97,27 @@ int main(int argc, char *argv[])
             {
                 struct sockaddr_in cli_addr;
                 socklen_t cli_len = sizeof(cli_addr);
-                int connfd = accept(listenfd, (sockaddr*)&cli_addr, &cli_len);
-                printf("有新的连接%d到来\n", connfd);
-                if(connfd < 0)
+                while(true)
                 {
-                    printf("errno is: %d\n", errno);
-                    continue;
+                    int connfd = accept(listenfd, (sockaddr*)&cli_addr, &cli_len);
+                    printf("有新的连接%d到来\n", connfd);
+                    if(connfd < 0)
+                    {
+                        if(errno == EAGAIN || errno == EWOULDBLOCK)
+                            break;
+                        printf("errno is: %d\n", errno);
+                        exit(1);
+                    }
+                    //超过最大连接上限
+                    std::cout << "m_user_count = " << http_conn::m_user_count << "\n";
+                    if(http_conn::m_user_count >= MAX_FD)
+                    {
+                        show_error(connfd, "Internal server busy");
+                        continue;
+                    }
+                    //初始化客户连接
+                    users[connfd].init(connfd, cli_addr);
                 }
-                //超过最大连接上限
-                std::cout << "m_user_count = " << http_conn::m_user_count << "\n";
-                if(http_conn::m_user_count >= MAX_FD)
-                {
-                    show_error(connfd, "Internal server busy");
-                    continue;
-                }
-                //初始化客户连接
-                users[connfd].init(connfd, cli_addr);
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {

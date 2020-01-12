@@ -1,5 +1,5 @@
 #include "http_conn.h"
-
+//加一个CGI服务器
 //定义HTTP响应的一些状态信息
 const char* ok_200_title = "OK";
 const char* error_400_title = "Bad Request";
@@ -26,6 +26,7 @@ void addfd(int epollfd, int fd, bool one_shot)
     epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    //event.events = EPOLLIN |  EPOLLRDHUP;
     if(one_shot)
         event.events |= EPOLLONESHOT;
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
@@ -44,6 +45,7 @@ void modfd(int epollfd, int fd, int ev)
     epoll_event event;
     event.data.fd = fd;
     event.events = ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
+    //event.events = ev | EPOLLET | EPOLLRDHUP;
     epoll_ctl(epollfd, EPOLL_CTL_MOD, fd,  &event);
 }
 
@@ -408,8 +410,13 @@ http_conn::HTTP_CODE http_conn::do_request()
         perror("open file erro");
     }
     //用mmap将文件映射到内存中
-    m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    m_file_address = (char *)mmap(NULL, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
+    /*
+    * 关闭fd会影响mmap的映射吗？
+    * 
+    * 
+    */
     return FILE_REQUEST;
 }
 
@@ -646,14 +653,6 @@ bool http_conn::process_write(http_conn::HTTP_CODE ret)
 //由于线程池中的工作线程调用，这是处理HTTP请求的入口函数
 void http_conn::process()
 {
-    ///*
-    bool flag = read();
-    if(!flag)
-    {
-        close_conn();
-        return;
-    }
-    //*/
 
     HTTP_CODE read_ret = process_read();
     if(read_ret == NO_REQUEST)
@@ -671,13 +670,6 @@ void http_conn::process()
         close_conn();
         std::cout << "关闭连接\n";
     }
-    /*
-    //write();
-    if(!write())
-    {
-        close_conn();
-    }
-    */
     //写响应请求，将epoll权限增加一个监听可写事件
     modfd(m_epollfd, m_sockfd, EPOLLOUT);
 }
