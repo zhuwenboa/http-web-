@@ -1,5 +1,5 @@
 #include "http_conn.h"
-
+#include<map>
 //定义HTTP响应的一些状态信息
 const char* ok_200_title = "OK";
 const char* error_400_title = "Bad Request";
@@ -12,6 +12,7 @@ const char* error_500_title = "Internal error";
 const char* error_500_form = "There was an unusual problem serving the requested file.\n";
 //网站的根目录
 const char* doc_root = "/home/xuexi/unix-/linux-高性能/15";
+
 
 //将套接字设置成非阻塞
 int setnonblocking(int fd)
@@ -28,10 +29,8 @@ void addfd(int epollfd, int fd)
     setnonblocking(fd);
     epoll_event event;
     event.data.fd = fd;
-    //event.events = EPOLLIN | EPOLLRDHUP;
     event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
-    //setnonblocking(fd);
 }
 //关闭连接
 void removefd(int epollfd, int fd)
@@ -53,6 +52,17 @@ void modfd(int epollfd, int fd, int ev)
 
 int http_conn::m_user_count = 0;
 int http_conn::m_epollfd = 0;
+std::map<int, http_CGI> http_CGI::cgi_conn;
+
+bool http_conn::cmp_file()
+{
+    int len = strlen(m_real_file);
+    //取出文件的后缀文件格式
+    char *temp = &m_real_file[len -3];
+    if(strcmp(temp, "php") == 0)
+        return true;
+    return false;
+}
 
 void  http_conn::close_conn(bool real_close)
 {
@@ -151,7 +161,7 @@ http_conn::LINE_STATUS http_conn::pares_line()
 }
 
 //循环读取客户数据，直到无数据可读或者对方关闭连接
-bool http_conn::read()
+int http_conn::read()
 {
     if(m_read_idx >= READ_BUFFER_SIZE)
         return false;
@@ -165,18 +175,21 @@ bool http_conn::read()
             {
                 break;
             }
-            return false;
+            return -1;
         }
         else if(bytes_read == 0)
         {
             std::cout << "有用户断开连接\n";
-            return false;
+            return -1;
         }
         m_read_idx += bytes_read;
     }
+    //判断是否为CGI服务器返回的消息
+    if(strcmp(m_read_buf, "#") == 0)
+        return 2;
     std::cout << "recv_length = " << bytes_read << "\n" << "recv_data: " << m_read_buf << std::endl;
     std::cout  << "m_read_idx = " << m_read_idx << "\n";
-    return true;
+    return 1;
 }
 
 //解析http请求行，获得请求方法，目标URL,以及http版本号
@@ -411,7 +424,7 @@ http_conn::HTTP_CODE http_conn::do_request()
     {
         perror("open file erro");
     }
-    //用mmap将文件映射到内存中
+    //用mmap将文件映射到内存中，用mmap将文件映射到内存中，减少拷贝次数，直接进行发送
     m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
     return FILE_REQUEST;
@@ -460,7 +473,6 @@ bool http_conn::write()
             return false;
         }
 
-     // bytes_to_send -= temp;
         bytes_have_send += temp;
         //响应发送完成
         if(bytes_to_send <= bytes_have_send)
@@ -549,18 +561,45 @@ bool http_conn::add_content(const char *content)
 }
 
 
-bool http_conn::ret_client(int m_err, const char *err1, const char *err2)
+
+//异步CGI 
+bool http_conn::fast_cgi()
 {
-    add_status_line(m_err, err1);
-    add_headers(strlen(err2));
-    if(!add_content(err2))
-        return false;
-    else
+    if(m_cgi == -1)
     {
-        return true;
+        return false;
     }
+    char writebuf[1024] = {0};
+    char *ip = "127.0.0.1";
+    int port = 8888;
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(ip);
+    int connfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(connfd < 0)
+        return false;
+
+    sprintf(writebuf, "%d:%s", connfd, m_real_file);
+    //连接CGI服务器
+    int ret = connect(connfd, (sockaddr*)&addr, sizeof(addr));
+    if(ret < 0)
+        return false;
+    http_CGI temp;
+    temp.m_connfd = connfd;
+    temp.http_sockfd = m_sockfd;
+    //加入到map中
+    http_CGI::cgi_conn.insert({connfd, temp});
     
+    //给CGI服务器发送需要解析的文件
+    ret = send(connfd, writebuf, sizeof(writebuf), 0);
+    if(ret < 0)
+        return false; 
+    //将fd加入到epoll事件集中进行异步处理
+    addfd(m_epollfd, connfd);
+    return true;
 }
+
 
 //根据服务器处理HTTP请求的结果，决定返回给客户端的内容
 bool http_conn::process_write(http_conn::HTTP_CODE ret)
@@ -569,55 +608,48 @@ bool http_conn::process_write(http_conn::HTTP_CODE ret)
     {
         case INTERNAL_ERROR:
         {
-            /*
+            
             add_status_line(500, error_500_title);
             add_headers(strlen(error_500_form));
             if(!add_content(error_500_form))
                 return false;
-            */
-            if(ret_client(500, error_500_title, error_500_form))
-                break;
-            else
-            {
-                return false;
-            }
-            
+            break;
         }
         case BAD_REQUEST:  
         {
-            /*
-                add_status_line(400, error_400_title);
-                add_headers(strlen(error_400_form));
-                if(!add_content(error_400_form))
-                    return false;
-            */
-            if(ret_client(400, error_400_title, error_400_form))
-                break;
-            else
-            {
+            add_status_line(400, error_400_title);
+            add_headers(strlen(error_400_form));
+            if(!add_content(error_400_form))
                 return false;
-            }
             break;
         }
         case NO_RESOURCE:  
         {
-            if(ret_client(404, error_404_title, error_404_form))
-                break;
-            else
-            {
+            add_status_line(400, error_400_title);
+            add_headers(strlen(error_400_form));
+            if(!add_content(error_400_form))
                 return false;
-            }
+            break;
         }
         case FORBIDDEN_REQUEST:  
         {
-            if(ret_client(403, error_403_title, error_403_form))
-                break;
-            else 
+            add_status_line(403, error_403_title);
+            add_headers(strlen(error_403_form));
+            if(!add_content(error_404_form))
                 return false;
+            break;
         }
         //文件可以读取
         case FILE_REQUEST:  
         {
+            //是否需要访问CGI服务器进行文件解析
+            if(cmp_file())
+            {
+                m_cgi = 1;
+                if(fast_cgi())
+                    return true;
+                return false;
+            }
             add_status_line(200, ok_200_title);
             if(m_file_stat.st_size != 0)
             {
@@ -657,11 +689,8 @@ void http_conn::process()
         modfd(m_epollfd, m_sockfd, EPOLLIN);
         return;
     }
-    //std::cout << "process_read's read_ret = " << read_ret << "\n";   
     bool write_ret = process_write(read_ret);
 
-    //std::cout << "write_ret = " << write_ret << "\n";
-    //std::cout << "响应内容： " << m_write_buf << "\n";
     if(!write_ret)
     {
         close_conn();

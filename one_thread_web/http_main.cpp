@@ -16,8 +16,9 @@
 #include "http_conn.h"
 
 #define MAX_FD 65536
-#define MAX_EVENT_NUMBER 100000
+#define MAX_EVENT_NUMBER 10000
 #define PORT 10086
+//const int MAX_CGI_FD = 20;
 
 extern int addfd(int epollfd, int fd);
 extern int removefd(int epollfd, int fd);
@@ -44,26 +45,18 @@ void show_error(int connfd, const char *info)
 int main(int argc, char *argv[])
 {
     printf("pid = %d\n", getpid());
+    
     //忽略SIGPIPE信号
     addsig(SIGPIPE, SIG_IGN);
 
-    /*
-    //创建线程池
-    threadpool<http_conn>* pool = NULL;
-    try
-    {
-        pool = new threadpool<http_conn>;
-    }
-    catch(...)
-    {
-        return 1;
-    }
-    */
     //预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
-    int user_count = 0;
-
+    /*
+    //预先为可能请求CGI服务器连接分配一个http_CGI对象
+    http_CGI *cgi_conn = new http_CGI[MAX_CGI_FD];
+    assert(cgi_conn);
+    */
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
     struct linger tmp = {1, 0}; //避免time_wait状态，断开连接时发送RST分节断开。
@@ -125,7 +118,7 @@ int main(int argc, char *argv[])
                     if(http_conn::m_user_count >= MAX_FD)
                     {
                         show_error(connfd, "Internal server busy");
-                        continue;
+                        break;
                     }
                     //初始化客户连接
                     users[connfd].init(connfd, cli_addr);
@@ -140,15 +133,20 @@ int main(int argc, char *argv[])
             else if(events[i].events & EPOLLIN)
             {
                 std::cout << "可读事件触发\n";
-                //users[fd].process(); //改进之后效率提升明显
                 
-                //根据读的结果，决定是将任务添加到线程池，还是关闭连接
-                if(users[fd].read())
+                //根据读的结果，来决定下一步操作
+                int ret = users[fd].read();
+                //浏览器发来的请求
+                if(ret == 1)
                 {
-                    std::cout << "将任务加入到工作队列中\n";
                     users[fd].process();    //单线程模型
                 }
-                else
+                //CGI返回的内容
+                if(ret == 2)
+                {
+
+                }    
+                else if(ret == -1)
                 {
                     users[fd].close_conn();
                 }
@@ -163,10 +161,6 @@ int main(int argc, char *argv[])
                 {
                     users[fd].close_conn();
                 }
-            }
-            else
-            {
-                std::cout << "欢迎来到德莱联盟\n";   
             }
         }
     }   

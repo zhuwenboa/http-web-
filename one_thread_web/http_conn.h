@@ -18,6 +18,8 @@
 #include<stdarg.h>
 #include<errno.h>
 #include<sys/uio.h>
+#include<map>
+class http_CGI;  //访问CGI服务器类声明
 
 class http_conn
 {
@@ -72,7 +74,7 @@ public:
     //处理客户请求
     void process();
     //非阻塞读操作()读取所有数据
-    bool read();
+    int read();
     //非阻塞写操作
     bool write();
 
@@ -84,9 +86,6 @@ private:
     //填充http应答
     bool process_write(HTTP_CODE ret);
 
-    //根据请求，返回客户端函数
-    bool ret_client(int m_err, const char *err1, const char *err2);
-
     //下面这一组函数被process_read调用以分析http请求
     HTTP_CODE parse_request_line(char* text);
     HTTP_CODE pares_headers(char* text);
@@ -94,6 +93,11 @@ private:
     HTTP_CODE do_request();
     char* get_line() {return m_read_buf + m_start_line;}
     LINE_STATUS pares_line();
+
+    //访问CGI服务器进行解析
+    bool fast_cgi();
+    //对请求的文件进行解析，判断是否为动态文件
+    bool cmp_file();
 
     //下面这一组函数被process_write调用以填充http应答
     void unmap();
@@ -112,7 +116,7 @@ public:
     static int m_user_count;
 
 private:  
-    //该http连接的socket和对方的socket地址
+    //保存客户连接套接字
     int m_sockfd;
     sockaddr_in m_address;
 
@@ -129,6 +133,9 @@ private:
     //写缓冲区中待发送的字节数
     int m_write_idx;
     
+    //是否调用CGI服务器
+    int m_cgi;
+
     //主状态机当前所处的状态
     CHECK_STATE m_check_state;
     //请求方法
@@ -154,6 +161,16 @@ private:
     //我们将采用writev来执行写操作，所以定义下面两个成员，其中m_iv_count标识被写内存块的数量
     struct iovec m_iv[2];
     int m_iv_count;
+};
+
+class http_CGI
+{
+public:  
+    http_CGI() : m_connfd(-1), http_sockfd(-1) {}
+    
+    static std::map<int, http_CGI>cgi_conn;
+    int m_connfd;  //请求CGI的fd
+    int http_sockfd; //请求web服务器的fd
 };
 
 
