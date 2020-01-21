@@ -18,7 +18,8 @@
 #include<stdarg.h>
 #include<errno.h>
 #include<sys/uio.h>
-//#include"locker.h"
+#include<map>
+class http_CGI;  //访问CGI服务器类声明
 
 class http_conn
 {
@@ -44,14 +45,15 @@ public:
     //服务器处理HTTP请求的可能结果
     enum HTTP_CODE 
     {
-        NO_REQUEST,  //请求不完整，需要读取客户数据
+        NO_REQUEST = 0,  //请求不完整，需要读取客户数据
         GET_REQUEST, //获得了一个完整的客户请求
         BAD_REQUEST, //客户请求有语法错误
         NO_RESOURCE, //不能提供所请求的服务
         FORBIDDEN_REQUEST, //客户对资源没有足够的访问权限
-        FILE_REQUEST, 
+        FILE_REQUEST,       //文件可以读取
         INTERNAL_ERROR, //服务器内部错误
-        CLOSED_CONNECTION //客户端已经关闭连接
+        CLOSED_CONNECTION, //客户端已经关闭连接
+        FAST_CGI           //需要访问CGI服务器进行解析
     };
 
     //行的读取状态
@@ -62,31 +64,31 @@ public:
         LINE_OPEN //行数据尚且不完整
     };
 public:  
-    http_conn () {}
+    http_conn () : flag(false){}
     ~http_conn ()  {}
 
 public:  
     //初始化新接受的连接
     void init(int sockfd, const sockaddr_in& addr);
     //关闭连接
-    void close_conn();
-    //处理客户请求,与线程池中的回调函数结合
+    void close_conn(bool real_close = true);
+    //处理客户请求
     void process();
     //非阻塞读操作()读取所有数据
     bool read();
     //非阻塞写操作
     bool write();
-
+    //声明问友元
+    friend class http_CGI;
+    //判断类中是否有连接
+    bool have_sockfd() {return flag;}
 private:  
     //初始化连接
     void init();
     //解析http请求
     HTTP_CODE process_read();
     //填充http应答
-    bool process_write(HTTP_CODE ret);
-
-    //根据请求，返回客户端函数
-    bool ret_client(int m_err, const char *err1, const char *err2);
+    int process_write(HTTP_CODE ret);
 
     //下面这一组函数被process_read调用以分析http请求
     HTTP_CODE parse_request_line(char* text);
@@ -113,7 +115,7 @@ public:
     static int m_user_count;
 
 private:  
-    //该http连接的socket和对方的socket地址
+    //保存客户连接套接字
     int m_sockfd;
     sockaddr_in m_address;
 
@@ -130,6 +132,9 @@ private:
     //写缓冲区中待发送的字节数
     int m_write_idx;
     
+    //是否调用CGI服务器
+    int m_cgi;
+
     //主状态机当前所处的状态
     CHECK_STATE m_check_state;
     //请求方法
@@ -155,6 +160,20 @@ private:
     //我们将采用writev来执行写操作，所以定义下面两个成员，其中m_iv_count标识被写内存块的数量
     struct iovec m_iv[2];
     int m_iv_count;
+
+    //表明本对象中是否有连接
+    bool flag;
+};
+
+class http_CGI
+{
+public:  
+    //访问CGI服务器进行解析
+    static bool fast_cgi(const char *file);
+    //对请求的文件进行解析，判断是否为动态文件
+    static bool cmp_file(const char *file);
+    //处理CGI服务器返回的信息
+    static bool deal_with_CGI(int fd);
 };
 
 

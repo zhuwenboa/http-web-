@@ -53,7 +53,8 @@ int main(int argc, char *argv[])
     //预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
-//  int user_count = 0;
+
+
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
     struct linger tmp = {1, 0}; //避免time_wait状态，断开连接时发送RST分节断开。
@@ -113,7 +114,7 @@ int main(int argc, char *argv[])
                     if(http_conn::m_user_count >= MAX_FD)
                     {
                         show_error(connfd, "Internal server busy");
-                        continue;
+                        break;
                     }
                     //初始化客户连接
                     users[connfd].init(connfd, cli_addr);
@@ -127,21 +128,26 @@ int main(int argc, char *argv[])
             //可读事件
             else if(events[i].events & EPOLLIN)
             {
-                std::cout << "可读事件触发\n";
-                //pool->append(users + fd);
-                ///* 
-                //根据读的结果，决定是将任务添加到线程池，还是关闭连接
-                if(users[fd].read())
+                //判断是否为浏览器发来的请求
+                if(users[fd].have_sockfd())
                 {
-                    std::cout << "将任务加入到工作队列中\n";
-                    pool->append(users + fd);
+                    //根据读的结果，决定是将任务添加到线程池，还是关闭连接
+                    if(users[fd].read())
+                    {
+                        std::cout << "将任务加入到工作队列中\n";
+                        pool->append(users + fd);
+                    }
+                    else
+                    {
+                        users[fd].close_conn();
+                    }
                 }
-                else
+                //CGI返回的内容
+                else 
                 {
-                    users[fd].close_conn();
-                }
-                //*/
-            }
+                    http_CGI::deal_with_CGI(fd);
+                }   
+            }   
             //可写事件
             else if(events[i].events & EPOLLOUT)
             {
