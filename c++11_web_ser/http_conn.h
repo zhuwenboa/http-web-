@@ -64,9 +64,8 @@ public:
         LINE_OPEN //行数据尚且不完整
     };
 public:  
-    http_conn () : flag(false){}
+    http_conn () : flag(false), m_read_idx(0){}
     ~http_conn ()  {}
-
 public:  
     //初始化新接受的连接
     void init(int sockfd, const sockaddr_in& addr);
@@ -78,10 +77,12 @@ public:
     bool read();
     //非阻塞写操作
     bool write();
-    //声明问友元
+
     friend class http_CGI;
     //判断类中是否有连接
     bool have_sockfd() {return flag;}
+    //保存CGI连接套接字
+    void cgi(int fd) {m_sockfd = fd;}
 private:  
     //初始化连接
     void init();
@@ -163,6 +164,8 @@ private:
 
     //表明本对象中是否有连接
     bool flag;
+    //int cgi_fd;
+
 };
 
 class http_CGI

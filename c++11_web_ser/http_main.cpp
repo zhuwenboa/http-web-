@@ -84,7 +84,6 @@ int main(int argc, char *argv[])
     {
         printf("epoll_wait 阻塞住\n");
         cond = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
-        printf("epoll_wait返回成功\n");
         if((cond < 0) && (errno != EINTR))
         {
             printf("epoll failure\n");
@@ -131,6 +130,7 @@ int main(int argc, char *argv[])
                 //判断是否为浏览器发来的请求
                 if(users[fd].have_sockfd())
                 {
+                    printf("////////\n");
                     //根据读的结果，决定是将任务添加到线程池，还是关闭连接
                     if(users[fd].read())
                     {
@@ -145,7 +145,18 @@ int main(int argc, char *argv[])
                 //CGI返回的内容
                 else 
                 {
-                    http_CGI::deal_with_CGI(fd);
+                    printf("******************\n");
+                    users[fd].cgi(fd);
+                    if(users[fd].read())
+                    {
+                        printf("CGI发来请求\n");
+                        pool->append(users + fd);
+                    }
+                    else
+                    {
+                        close(fd);
+                        printf("CGI关闭连接\n");
+                    }
                 }   
             }   
             //可写事件

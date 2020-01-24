@@ -168,6 +168,7 @@ bool http_conn::read()
     while(true)
     {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
+        std::cout << "m_readbuf = " << m_read_buf << "\n";
         if(bytes_read == -1)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -472,7 +473,7 @@ bool http_conn::write()
             {
                 //modfd(m_epollfd, m_sockfd, EPOLLIN);
                 //如果不持续连接，返回false，让主函数判断关闭该连接
-                return false;
+                return false;        
             }            
         }
     }
@@ -571,12 +572,14 @@ bool http_CGI::fast_cgi(const char *file)
         return false; 
     //将fd加入到epoll事件集中进行异步处理
     addfd(http_conn::m_epollfd, connfd, true);
+    std::cout << "fast_Cgi 发送完成\n";
     return true;
 }
 
 bool http_CGI::deal_with_CGI(int fd)
 {
-    
+    //处理CGI发来的内容
+    printf("cgi服务器运行\n");
 }
 
 //根据服务器处理HTTP请求的结果，决定返回给客户端的内容
@@ -660,6 +663,12 @@ int http_conn::process_write(http_conn::HTTP_CODE ret)
 //由于线程池中的工作线程调用，这是处理HTTP请求的入口函数
 void http_conn::process()
 {
+    //处理CGI返回的内容
+    if(!flag)
+    {
+        http_CGI::deal_with_CGI(m_sockfd);
+        return;
+    }
     HTTP_CODE read_ret = process_read();
     if(read_ret == NO_REQUEST)
     {
@@ -674,10 +683,16 @@ void http_conn::process()
         return;
     }
     if(write_ret == 1)
+    {
         modfd(m_epollfd, m_sockfd, EPOLLOUT);
+        return;
+    }
     //需要等待CGI异步处理完成，继续监控可读事件
     if(write_ret == 2)
+    {
         modfd(m_epollfd, m_sockfd, EPOLLIN);
+        return;
+    }
 }
 
 
