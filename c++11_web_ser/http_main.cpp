@@ -15,6 +15,7 @@
 #include<semaphore.h>
 #include "threadpool.h"
 #include "http_conn.h"
+#include "heap_time.h"
 
 #define MAX_FD 65536   
 #define MAX_EVENT_NUMBER 10000
@@ -47,13 +48,16 @@ int main(int argc, char *argv[])
     printf("process id = %d", getpid());
     //忽略SIGPIPE信号
     addsig(SIGPIPE, SIG_IGN);
-
+    //初始化线程池
     threadpool<http_conn>* pool = new threadpool<http_conn>(8);
-    
+    //初始化定时器
+    time_heap Timer(1000); 
+
     //预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
-
+    //预先分配定时器类对象
+    heap_timer *time_ = new heap_timer[MAX_FD];
 
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
@@ -117,6 +121,10 @@ int main(int argc, char *argv[])
                     }
                     //初始化客户连接
                     users[connfd].init(connfd, cli_addr);
+
+                    //将新到来的连接加入定时器中
+                    time_[connfd].init(users[connfd]);
+                    Timer.add_timer(&time_[connfd]);
                 }
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
@@ -136,6 +144,8 @@ int main(int argc, char *argv[])
                     {
                         std::cout << "将任务加入到工作队列中\n";
                         pool->append(users + fd);
+                        //更新定时器
+                        time_[fd].retime();
                     }
                     else
                     {
