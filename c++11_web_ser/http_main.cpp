@@ -24,6 +24,11 @@
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
 
+void timer_func(http_conn maturity)
+{
+    printf("定时器回调函数执行\n");
+}
+
 //信号处理函数,所有线程也会调用该信号处理。
 void addsig(int sig, void(handler)(int), bool restart = true)
 {
@@ -51,7 +56,7 @@ int main(int argc, char *argv[])
     //初始化线程池
     threadpool<http_conn>* pool = new threadpool<http_conn>(8);
     //初始化定时器
-    time_heap Timer(1000); 
+    time_heap Timer; 
 
     //预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
@@ -124,7 +129,8 @@ int main(int argc, char *argv[])
 
                     //将新到来的连接加入定时器中
                     time_[connfd].init(users[connfd]);
-                    Timer.add_timer(&time_[connfd]);
+                    time_[connfd].cb_func = timer_func;
+                    Timer.add_timer(time_[connfd]);
                 }
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
@@ -138,7 +144,6 @@ int main(int argc, char *argv[])
                 //判断是否为浏览器发来的请求
                 if(users[fd].have_sockfd())
                 {
-                    printf("////////\n");
                     //根据读的结果，决定是将任务添加到线程池，还是关闭连接
                     if(users[fd].read())
                     {
@@ -150,12 +155,12 @@ int main(int argc, char *argv[])
                     else
                     {
                         users[fd].close_conn();
+                        Timer.del_timer(time_[fd]);
                     }
                 }
                 //CGI返回的内容
                 else 
                 {
-                    printf("******************\n");
                     users[fd].cgi(fd);
                     if(users[fd].read())
                     {
@@ -178,7 +183,6 @@ int main(int argc, char *argv[])
                 {
                     users[fd].close_conn();
                 }
-                
             }
             else
             {
@@ -189,6 +193,7 @@ int main(int argc, char *argv[])
     close(epollfd);
     close(listenfd);
     delete [] users;
+    delete [] time_;
     delete pool;
     return 0;
 }
