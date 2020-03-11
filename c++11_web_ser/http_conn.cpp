@@ -559,7 +559,9 @@ bool http_CGI::fast_cgi(const char *file)
     int connfd = socket(AF_INET, SOCK_STREAM, 0);
     if(connfd < 0)
         return false;
-
+    //将fd加入到epoll事件集中进行异步处理
+    addfd(http_conn::m_epollfd, connfd, true);
+    
     sprintf(writebuf, "%d:%s", connfd, file);
     //连接CGI服务器
     int ret = connect(connfd, (sockaddr*)&addr, sizeof(addr));
@@ -568,10 +570,12 @@ bool http_CGI::fast_cgi(const char *file)
 
     //给CGI服务器发送需要解析的文件
     ret = send(connfd, writebuf, sizeof(writebuf), 0);
+    //如果发送失败，则将connfd从epoll中删除
     if(ret < 0)
+    {
+        removefd(http_conn::m_epollfd, connfd);
         return false; 
-    //将fd加入到epoll事件集中进行异步处理
-    addfd(http_conn::m_epollfd, connfd, true);
+    }
     std::cout << "fast_Cgi 发送完成\n";
     return true;
 }

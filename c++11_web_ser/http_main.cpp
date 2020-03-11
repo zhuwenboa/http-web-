@@ -59,10 +59,13 @@ int main(int argc, char *argv[])
     time_heap Timer; 
 
     //预先为每个可能的客户连接分配一个http_conn对象
-    http_conn *users = new http_conn[MAX_FD];
-    assert(users);
+    std::vector<http_conn> users;
+    users.reserve(MAX_FD);
+    
     //预先分配定时器类对象
-    heap_timer *time_ = new heap_timer[MAX_FD];
+    std::vector<heap_timer> time_;
+    time_.reserve(MAX_FD);
+    //heap_timer *time_ = new heap_timer[MAX_FD];
 
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
@@ -148,7 +151,7 @@ int main(int argc, char *argv[])
                     if(users[fd].read())
                     {
                         std::cout << "将任务加入到工作队列中\n";
-                        pool->append(users + fd);
+                        pool->append(&users[fd]);
                         //更新定时器
                         time_[fd].retime();
                     }
@@ -165,7 +168,8 @@ int main(int argc, char *argv[])
                     if(users[fd].read())
                     {
                         printf("CGI发来请求\n");
-                        pool->append(users + fd);
+                        pool->append(&users[fd]);
+                        //pool->append(users + fd);
                     }
                     else
                     {
@@ -192,8 +196,8 @@ int main(int argc, char *argv[])
     }   
     close(epollfd);
     close(listenfd);
-    delete [] users;
-    delete [] time_;
+    //delete [] users;
+    //delete [] time_;
     delete pool;
     return 0;
 }

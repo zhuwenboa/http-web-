@@ -1,5 +1,5 @@
-#ifndef HEAP_TIME
-#define HEAP_TIME
+#ifndef HEAP_TIME_H
+#define HEAP_TIME_H
 
 #include<iostream>
 #include<sys/types.h>

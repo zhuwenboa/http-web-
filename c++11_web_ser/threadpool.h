@@ -32,8 +32,8 @@ private:
     //pthread_t* m_threads; //描述线程池的数组，其大小为m_thread_number
     std::list<T*>m_workqueue; //请求队列
     std::vector<std::thread> p; //vector存储线程池
-    std::mutex m;                          //锁   
-    std::condition_variable cond;    //条件变量
+    mutable std::mutex m;                          //锁   
+    mutable std::condition_variable cond;    //条件变量
     bool m_stop; //是否结束线程
 };
 

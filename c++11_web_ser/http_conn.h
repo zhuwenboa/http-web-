@@ -164,7 +164,6 @@ private:
 
     //表明本对象中是否有连接
     bool flag;
-    //int cgi_fd;
 
 };
 
@@ -179,5 +178,5 @@ public:
     static bool deal_with_CGI(int fd);
 };
 
-
 #endif
+
