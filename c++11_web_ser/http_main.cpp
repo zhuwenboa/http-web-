@@ -169,11 +169,10 @@ int main(int argc, char *argv[])
                     {
                         printf("CGI发来请求\n");
                         pool->append(&users[fd]);
-                        //pool->append(users + fd);
                     }
                     else
                     {
-                        close(fd);
+                        users[fd].close_conn();
                         printf("CGI关闭连接\n");
                     }
                 }   
