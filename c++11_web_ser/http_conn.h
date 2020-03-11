@@ -79,7 +79,7 @@ public:
     bool write();
 
     friend class http_CGI;
-    //判断类中是否有连接
+    //判断是否为web的连接
     bool have_sockfd() {return flag;}
     //保存CGI连接套接字
     void cgi(int fd) {m_sockfd = fd;}
