@@ -15,6 +15,7 @@ Condition Log_queue::cond(mutex);
 std::queue<std::vector<std::string>> Log_queue::work_queue;
 int Log_queue::MAX_BACKEND_LEN = 20;
 int Log_queue::backend_buffer_len = 0;
+bool Log_queue::flag = true;
 
 void Log::add_log(const std::string& mes)
 {
@@ -48,7 +49,7 @@ void Log_queue::append(std::vector<std::string> messages)
 
 void Log_queue::work()
 {
-    while(true)
+    while(flag)
     {
         mutex.lock();
         while(backend_buffer_len < MAX_BACKEND_LEN)

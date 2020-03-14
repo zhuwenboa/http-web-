@@ -16,6 +16,7 @@
 #include "threadpool.h"
 #include "http_conn.h"
 #include "heap_time.h"
+#include "AsyncLog.h"
 
 #define MAX_FD 65536   
 #define MAX_EVENT_NUMBER 10000
@@ -48,13 +49,17 @@ void show_error(int connfd, const char *info)
     close(connfd);
 }
 
+
 int main(int argc, char *argv[])
 {
-    printf("process id = %d", getpid());
     //忽略SIGPIPE信号
     addsig(SIGPIPE, SIG_IGN);
-    //初始化线程池
-    threadpool<http_conn>* pool = new threadpool<http_conn>(8);
+    //初始化线程池，启动工作线程
+    threadpool<http_conn>* pool = new threadpool<http_conn>(6);
+
+    //启动日志线程
+    std::thread log_thread(Log_queue::work);
+
     //初始化定时器
     time_heap Timer; 
 
@@ -65,11 +70,11 @@ int main(int argc, char *argv[])
     //预先分配定时器类对象
     std::vector<heap_timer> time_;
     time_.reserve(MAX_FD);
-    //heap_timer *time_ = new heap_timer[MAX_FD];
+
 
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
-    struct linger tmp = {1, 0}; //避免time_wait状态，断开连接时发送RST分节断开。
+    struct linger tmp = {1, 0}; //避免time_wait状态，断开连接时发送RST分节断开,主要用于测试服务器时使用
     setsockopt(listenfd, SOL_SOCKET, SO_LINGER, &tmp, sizeof(tmp));
 
     int ret = 0;
@@ -195,8 +200,9 @@ int main(int argc, char *argv[])
     }   
     close(epollfd);
     close(listenfd);
-    //delete [] users;
-    //delete [] time_;
     delete pool;
+    //终止日志线程
+    Log_queue::exit_log();
+    log_thread.join();
     return 0;
 }
