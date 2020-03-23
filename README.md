@@ -12,7 +12,9 @@
 ### web服务器中代码简要分析
 
 #### web服务器主框架
-- 采用Epoll+线程池的Reactor事件驱动模型
+- 主线程epoll+线程池处理任务的Reactor事件驱动模型
+- Epoll采用ET模式
+
 
 #### 在web服务器中引入了Fast_cgi服务器
 - Fast_cgi用进程池实现，主进程监听listenfd采用Round_Robin算法来将连接分配给子进程。
@@ -31,6 +33,7 @@
                     break;
                 }
                 sub_process_counter = (i + 1)%m_process_number
+
 ```
 父进程通过管道将新连接发送给子进程。
 
@@ -59,6 +62,20 @@
 - 工作线程有自己的一个缓冲buffer，每个工作线程先向工作buffer中写，当写到一定数量然后加入的日志队列中，有专门的日志线程读取并写入磁盘。
 - 采用该方法可以避免每个线程都需要往磁盘中写，增加IO时间开销，由专门的IO线程去写入磁盘。
 ```cpp
-void Log_queue::append(std::vector<std::string> messages);
+void Log_queue::append(std::vector<std::string>& messages);
 void Log_queue::work();
 ```
+
+- 在日志线程中，当缓冲区到达该写入文件的临界点时，我们创建一个临时对象，用std::swap交换，可以减小锁的粒度，而不用等待将所有数据写到文件中再解锁。
+```cpp
+        mutex.lock();
+        while(backend_buffer_len < MAX_BACKEND_LEN)
+        {
+            cond.wait();
+        }
+        std::queue<std::vector<std::string>> temp_queue;
+        std::swap(temp_queue, work_queue);                   //用swap交换buffer，减少锁的粒度。
+        backend_buffer_len = 0;
+        mutex.unlock();
+```
+
