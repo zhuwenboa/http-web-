@@ -6,3 +6,6 @@ http_conn.o: http_conn.cpp http_conn.h AsyncLog.h Mutexlock.h
 	g++ -c http_conn.cpp 
 AsyncLog.o: AsyncLog.cpp AsyncLog.h Mutexlock.h
 	g++ -c AsyncLog.cpp
+
+clean: 
+	rm http_conn.o http_main.o AsyncLog.o
