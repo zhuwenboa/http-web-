@@ -7,7 +7,7 @@
 
 int Log::MAX_LOG = 100;
 
-int fd = open("sys_log.txt", O_RDWR | O_CREAT, 0666);
+int log_fd = open("sys_log.txt", O_RDWR | O_CREAT, 0666);
 
 
 Mutexlock Log_queue::mutex;
@@ -56,15 +56,25 @@ void Log_queue::work()
         {
             cond.wait();
         }
-        //将数据写入磁盘，并更新backend_buffer_len
-        for(int i = 0; i < backend_buffer_len; ++i)
-        {
-            for(auto a : work_queue.front())
-            {
-                write(fd, a.c_str(), a.size());
-            }
-        }                
+        std::queue<std::vector<std::string>> temp_queue;
+        std::swap(temp_queue, work_queue);                   //用swap交换buffer，减少锁的粒度。
         backend_buffer_len = 0;
         mutex.unlock();
+
+        //将数据写入磁盘
+        for(int i = 0; i < temp_queue.size(); ++i)
+        {
+            for(auto a : temp_queue.front())
+            {
+                int ret = write(log_fd, a.c_str(), a.size());
+                if(ret > 0)
+                    continue;
+                else
+                {
+                    //write error;       
+                }
+                temp_queue.pop();
+            }
+        }                
     }
 }
