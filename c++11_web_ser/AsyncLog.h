@@ -1,10 +1,13 @@
 #ifndef ASYNCLOG_H
 #define ASYNCLOG_H
+
+#include<iostream>
 #include<vector>
 #include<string.h>
 #include<string>
 #include<queue>
-#include "Mutexlock.h"
+#include<mutex>
+#include<condition_variable>
 
 class Log_queue;
 
@@ -21,7 +24,7 @@ public:
         ERROR,
         FATAL
     };
-
+    
     void add_log(const std::string&);
 
 private: 
@@ -34,24 +37,34 @@ private:
 class Log_queue
 {
 public:   
-    Log_queue() {}
+    Log_queue() : 
+                  backend_buffer_len(0), 
+                  flag(true)
+                  {}
     //删除拷贝构造和拷贝赋值函数
     Log_queue(const Log_queue&)  = delete;
     Log_queue operator = (const Log_queue&)  = delete;
 
-    static void append(std::vector<std::string>);    
-    static void work();
-    static void exit_log()
+    void append(std::vector<std::string>&);    
+    static void run(void *arg);
+    void work();
+    
+    bool OpenFile();
+    
+    void exit_log()
     {
         flag = false;
     }
 private:  
-    static std::queue<std::vector<std::string>> work_queue;
-    static Mutexlock mutex;
-    static Condition cond;
-    static int backend_buffer_len;
-    static int MAX_BACKEND_LEN;
-    static bool flag;
+    
+
+    std::queue<std::vector<std::string>> work_queue;
+    mutable std::mutex mutex_;
+    std::condition_variable cond_;
+    int backend_buffer_len;
+    const int MAX_BACKEND_LEN = 20;
+    bool flag;
+    int Logfile_fd;
 };
 
 #endif

@@ -19,6 +19,7 @@
 #include<errno.h>
 #include<sys/uio.h>
 #include<map>
+#include"AsyncLog.h"
 class http_CGI;  //访问CGI服务器类声明
 
 class http_conn
@@ -30,7 +31,8 @@ public:
     static const int READ_BUFFER_SIZE = 2048;
     //写缓冲区的大小
     static const int WRITE_BUFFER_SIZE = 1024;
-    
+
+
     //HTTP请求方法，但我们仅支持get
     enum METHOD {GET = 0, POST, HEAD, PUT, DELETE, TRACE, OPTIONS, CONNECT, PATCH};
 
@@ -78,7 +80,8 @@ public:
     //非阻塞写操作
     bool write();
 
-    friend class http_CGI;
+    bool wirte_log(const std::string& mes, Log& log);
+
     //判断是否为web的连接
     bool have_sockfd() {return flag;}
     //保存CGI连接套接字
@@ -165,6 +168,8 @@ private:
     //表明本对象中是否有连接
     bool flag;
 
+    //日志类
+    //class Log log;    
 };
 
 class http_CGI

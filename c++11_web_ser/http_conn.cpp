@@ -12,6 +12,7 @@ const char* error_500_form = "There was an unusual problem serving the requested
 //网站的根目录
 const char* doc_root = "/home/xuexi/unix-/linux-高性能/15/web";
 
+Log front_log;
 
 //将套接字设置成非阻塞
 int setnonblocking(int fd)
@@ -19,7 +20,11 @@ int setnonblocking(int fd)
     int old_option = fcntl(fd, F_GETFL);
     int ret = fcntl(fd, F_SETFL, old_option | O_NONBLOCK);
     if(ret < 0)
-        std::cout << "fcntl erro  line is " << __LINE__ << std::endl; 
+    {   
+        //sprintf();
+        //front_log.add_log("fcntl erro\n");
+        //std::cout << "fcntl erro  line is " << __LINE__ << std::endl;
+    }
     return old_option;
 }
 
@@ -56,9 +61,21 @@ int http_conn::m_epollfd = 0;
 bool http_CGI::cmp_file(const char *file)
 {
     int len = strlen(file);
+    int flag;
     //取出文件的后缀文件格式
-    const char *temp = &file[len -3];
-    std::cout << "temp_file = " << temp << "\n";
+    for(int i = len - 1; i >= 0; --i)
+    {
+        if(file[i] == '.')
+        {
+            flag = i;
+            break;
+        }
+    }
+    const char *temp = &file[flag + 1];
+    char buf[128] = {0};
+    //sprintf(buf, "temp_file = %s\n", temp);
+    //front_log.add_log(buf);
+    //std::cout << "temp_file = " << temp << "\n";
     if(strcmp(temp, "php") == 0)
         return true;
     return false;
@@ -155,7 +172,8 @@ http_conn::LINE_STATUS http_conn::pares_line()
         }
     }
     //如果所有内容分析完毕也没遇到\r字符，则返回LINE_OPEN，表示还需要继续读取客户数据才能进一步分析
-    std::cout << "LINE_OPEN 2 \n";
+    //front_log.add_log("LINE_OPEN \n");
+    //std::cout << "LINE_OPEN 2 \n";
     return LINE_OPEN;
 }
 
@@ -168,7 +186,8 @@ bool http_conn::read()
     while(true)
     {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
-        std::cout << "m_readbuf = " << m_read_buf << "\n";
+        front_log.add_log("m_readbuf\n");
+        //std::cout << "m_readbuf = " << m_read_buf << "\n";
         if(bytes_read == -1)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -179,7 +198,7 @@ bool http_conn::read()
         }
         else if(bytes_read == 0)
         {
-            std::cout << "有用户断开连接\n";
+            //std::cout << "有用户断开连接\n";
             return false;
         }
         m_read_idx += bytes_read;
@@ -198,11 +217,11 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     }
     *m_url++ = '\0';
 
-    std::cout << "m_url:" << m_url << "\n";
+    //std::cout << "m_url:" << m_url << "\n";
     
     //method存储请求的方法
     char* method = text;
-    std::cout << "method =" << method << "\n";
+    //std::cout << "method =" << method << "\n";
     //strcasecmp函数，忽略大小写比较字符串
     if(strcasecmp(method, "GET") == 0)
     {
@@ -215,7 +234,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     //size_t strspn(const char *s, const char *accept);返回字符串s开头连续包含字符串accept内的数目
     m_url += strspn(m_url, " \t");
     
-    std::cout << "m_url:" << m_url << "\n";
+    //std::cout << "m_url:" << m_url << "\n";
     
     m_version = strpbrk(m_url, " \t");
     if(!m_version)
@@ -224,7 +243,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     }
     *m_version++ = '\0';
     m_version += strspn(m_version, " \t");
-    std::cout << "m_version:" << m_version << "\n";
+    //std::cout << "m_version:" << m_version << "\n";
     if(strcasecmp(m_version, "HTTP/1.1") != 0)
     {
         return BAD_REQUEST;
@@ -270,7 +289,7 @@ http_conn::HTTP_CODE http_conn::pares_headers(char* text)
         //Connection: close,明确要求服务器关闭TCP连接
         if(strcasecmp(text, "keep-alive") == 0)
         {
-            std::cout << "keep-alive\n";
+            //std::cout << "keep-alive\n";
             m_linger = true;
         }
     }
@@ -295,7 +314,7 @@ http_conn::HTTP_CODE http_conn::pares_headers(char* text)
     }
     else
     {
-        printf("=======! unknow header %s\n", text);
+        //printf("=======! unknow header %s\n", text);
     }
     return NO_REQUEST;
 }
@@ -376,7 +395,7 @@ http_conn::HTTP_CODE http_conn::do_request()
     int len = strlen(doc_root);
     //将解析出的网站名复制到网站根目录后
     strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
-    std::cout << "m_real_file = " << m_real_file << "\n";
+    //std::cout << "m_real_file = " << m_real_file << "\n";
     if(http_CGI::cmp_file(m_real_file))
         return FAST_CGI;
     /*
@@ -429,7 +448,7 @@ bool http_conn::write()
     int temp = 0;
     int bytes_have_send = 0;
     int bytes_to_send = m_write_idx;
-    std::cout << "m_write_idx = " << m_write_idx << "\n";
+    //std::cout << "m_write_idx = " << m_write_idx << "\n";
     //如果发送缓冲区中无数据，则更新epoll选项，加入EPOLLIN事件
     if(bytes_to_send == 0)
     {
@@ -451,7 +470,7 @@ bool http_conn::write()
                 modfd(m_epollfd, m_sockfd, EPOLLOUT);
                 return true;
             }  
-            std::cout << "写操作出错\n"; 
+            //std::cout << "写操作出错\n"; 
             unmap();
             return false;
         }
@@ -461,7 +480,7 @@ bool http_conn::write()
         if(bytes_to_send <= bytes_have_send)
         {
             //发送HTTP响应成功，根据HTTP请求中的Connection字段决定是否立即关闭
-            std::cout << "发送HTPP响应成功\n";
+            //std::cout << "发送HTPP响应成功\n";
             unmap();
             if(m_linger)
             {
@@ -548,7 +567,7 @@ bool http_conn::add_content(const char *content)
 //异步CGI 
 bool http_CGI::fast_cgi(const char *file)
 {
-    std::cout << "fast_cgi运行\n";
+    //std::cout << "fast_cgi运行\n";
     char writebuf[1024] = {0};
     char *ip = "127.0.0.1";
     int port = 8888;
@@ -576,7 +595,7 @@ bool http_CGI::fast_cgi(const char *file)
         removefd(http_conn::m_epollfd, connfd);
         return false; 
     }
-    std::cout << "fast_Cgi 发送完成\n";
+    //std::cout << "fast_Cgi 发送完成\n";
     return true;
 }
 
@@ -584,6 +603,12 @@ bool http_CGI::deal_with_CGI(int fd)
 {
     //处理CGI发来的内容
     printf("cgi服务器运行\n");
+}
+
+bool http_conn::wirte_log(const std::string& mes, Log& log)
+{
+    log.add_log(std::move(mes));
+    return true;
 }
 
 //根据服务器处理HTTP请求的结果，决定返回给客户端的内容

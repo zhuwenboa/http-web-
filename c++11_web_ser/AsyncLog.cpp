@@ -5,24 +5,17 @@
 #include<iostream>
 #include<fcntl.h>
 
+class Log_queue back_log_;
+
 int Log::MAX_LOG = 100;
 
-int log_fd = open("sys_log.txt", O_RDWR | O_CREAT, 0666);
-
-
-Mutexlock Log_queue::mutex;
-Condition Log_queue::cond(mutex);
-std::queue<std::vector<std::string>> Log_queue::work_queue;
-int Log_queue::MAX_BACKEND_LEN = 20;
-int Log_queue::backend_buffer_len = 0;
-bool Log_queue::flag = true;
 
 void Log::add_log(const std::string& mes)
 {
     //如果该工作线程的日志数大于MAX_LOG，则将其添加到工作线程进行处理
     if(buffer_len >= MAX_LOG)
     {
-        Log_queue::append(log_buffer);
+        back_log_.append(log_buffer);
         buffer_len = 0;
         log_buffer.clear();
     }
@@ -33,42 +26,55 @@ void Log::add_log(const std::string& mes)
     }
 }
 
-void Log_queue::append(std::vector<std::string> messages)
+
+void Log_queue::append(std::vector<std::string>& messages)
 {
-    mutex.lock();
+    mutex_.lock();
     work_queue.emplace(messages);
     ++backend_buffer_len;
     if(backend_buffer_len >= MAX_BACKEND_LEN)
     {
-        mutex.unlock();
-        cond.notify();
+        mutex_.unlock();
+        cond_.notify_one();
     }
     else 
-        mutex.unlock();
+        mutex_.unlock();
 }
 
+//单独开辟线程调用此函数
+void Log_queue::run(void *arg)
+{
+    Log_queue* log = static_cast<Log_queue*>(arg);
+    if(log->OpenFile())
+        log->work();
+}
+
+//工作函数
 void Log_queue::work()
 {
     while(flag)
     {
-        mutex.lock();
+        std::unique_lock<std::mutex> lk(mutex_);
         while(backend_buffer_len < MAX_BACKEND_LEN)
         {
-            cond.wait();
+            cond_.wait(lk);
         }
         std::queue<std::vector<std::string>> temp_queue;
         std::swap(temp_queue, work_queue);                   //用swap交换buffer，减少锁的粒度。
         backend_buffer_len = 0;
-        mutex.unlock();
+        mutex_.unlock();
 
         //将数据写入磁盘
         for(int i = 0; i < temp_queue.size(); ++i)
         {
             for(auto a : temp_queue.front())
             {
-                int ret = write(log_fd, a.c_str(), a.size());
+                int ret = write(Logfile_fd, a.c_str(), a.size());
                 if(ret > 0)
+                {
+                    std::cout << "写入文件成功\n";
                     continue;
+                }
                 else
                 {
                     //write error;       
@@ -77,4 +83,15 @@ void Log_queue::work()
             }
         }                
     }
+    close(Logfile_fd);
+}
+
+bool Log_queue::OpenFile()
+{
+    Logfile_fd = open("log.txt", O_CREAT | O_RDWR, 0666);
+    if(Logfile_fd < 0)
+    {
+        return false;
+    }
+    return true;
 }

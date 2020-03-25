@@ -22,8 +22,11 @@
 #define MAX_EVENT_NUMBER 10000
 #define PORT 10086
 
+//addfd和removefd在http.conn.cpp中定义，所以需要再次加extern关键字进行声明
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
+
+extern Log_queue back_log_; //日志
 
 void timer_func(http_conn maturity)
 {
@@ -58,7 +61,7 @@ int main(int argc, char *argv[])
     threadpool<http_conn>* pool = new threadpool<http_conn>(6);
 
     //启动日志线程
-    std::thread log_thread(Log_queue::work);
+    std::thread log_thread(Log_queue::run, &back_log_);
 
     //初始化定时器
     time_heap Timer; 
@@ -99,7 +102,7 @@ int main(int argc, char *argv[])
     int cond; //接收epoll_wait的返回值
     while(true)
     {
-        printf("epoll_wait 阻塞住\n");
+        //printf("epoll_wait 阻塞住\n");
         cond = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
         if((cond < 0) && (errno != EINTR))
         {
@@ -117,7 +120,7 @@ int main(int argc, char *argv[])
                 while(true)
                 {
                     int connfd = accept(listenfd, (sockaddr*)&cli_addr, &cli_len);
-                    printf("有新的连接%d到来\n", connfd);
+                    //printf("有新的连接%d到来\n", connfd);
                     if(connfd < 0)
                     {
                         if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -126,7 +129,7 @@ int main(int argc, char *argv[])
                         exit(1);
                     }
                     //超过最大连接上限
-                    std::cout << "m_user_count = " << http_conn::m_user_count << "\n";
+                    //std::cout << "m_user_count = " << http_conn::m_user_count << "\n";
                     if(http_conn::m_user_count >= MAX_FD)
                     {
                         show_error(connfd, "Internal server busy");
@@ -155,7 +158,7 @@ int main(int argc, char *argv[])
                     //根据读的结果，决定是将任务添加到线程池，还是关闭连接
                     if(users[fd].read())
                     {
-                        std::cout << "将任务加入到工作队列中\n";
+                        //std::cout << "将任务加入到工作队列中\n";
                         pool->append(&users[fd]);
                         //更新定时器
                         time_[fd].retime();
@@ -172,20 +175,20 @@ int main(int argc, char *argv[])
                     users[fd].cgi(fd);
                     if(users[fd].read())
                     {
-                        printf("CGI发来请求\n");
+                        //printf("CGI发来请求\n");
                         pool->append(&users[fd]);
                     }
                     else
                     {
                         users[fd].close_conn();
-                        printf("CGI关闭连接\n");
+                        //printf("CGI关闭连接\n");
                     }
                 }   
             }   
             //可写事件
             else if(events[i].events & EPOLLOUT)
             {
-                std::cout << "写事件触发\n";
+                //std::cout << "写事件触发\n";
                 //根据写的结果，决定是否关闭连接
                 if(!users[fd].write())
                 {
@@ -202,7 +205,7 @@ int main(int argc, char *argv[])
     close(listenfd);
     delete pool;
     //终止日志线程
-    Log_queue::exit_log();
+    back_log_.exit_log();
     log_thread.join();
     return 0;
 }
