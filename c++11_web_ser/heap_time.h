@@ -33,14 +33,6 @@ public:
         expire = time(NULL) + delay; 
     }
 
-    friend bool operator > (const heap_timer& a, const heap_timer& b)
-    {
-        return a.expire < b.expire; 
-    }
-    friend bool operator < (const heap_timer &a, const heap_timer &b)
-    {
-        return a.expire > b.expire;
-    }
     void init(const http_conn &a)
     {
         expire = time(NULL) + 15;
@@ -57,6 +49,13 @@ public:
 
 };
 
+struct timer_compare
+{
+    bool operator() (const heap_timer& a, const heap_timer& b)
+    {
+        return a.expire > b.expire;
+    }
+};
 
 //时间堆类
 class time_heap
@@ -116,7 +115,7 @@ public:
     }
 
 private: 
-    std::priority_queue<heap_timer> heap;
+    std::priority_queue<heap_timer, std::vector<heap_timer>, timer_compare> heap;
 };
 
 #endif
