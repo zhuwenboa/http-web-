@@ -26,7 +26,7 @@
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
 
-extern Log_queue back_log_; //日志
+extern Log_queue back_log_; //日志, 定义在AsyncLog.cpp中
 
 void timer_func(http_conn maturity)
 {
@@ -97,12 +97,15 @@ int main(int argc, char *argv[])
     int epollfd = epoll_create(5);
     assert(epollfd != -1);
     addfd(epollfd, listenfd, false);
+
+    //将定时器唤醒timerfd加入到epoll事件集中
+    addfd(epollfd, Timer.getTimerfd(), false);
+    Timer.start_wakeup();
     http_conn::m_epollfd = epollfd;
 
     int cond; //接收epoll_wait的返回值
     while(true)
     {
-        //printf("epoll_wait 阻塞住\n");
         cond = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
         if((cond < 0) && (errno != EINTR))
         {
@@ -142,6 +145,15 @@ int main(int argc, char *argv[])
                     time_[connfd].init(users[connfd]);
                     time_[connfd].cb_func = timer_func;
                     Timer.add_timer(time_[connfd]);
+                }
+            }
+            //处理定时任务
+            else if(fd == Timer.getTimerfd())
+            {
+                if(Timer.TimeRead())
+                {
+                    Timer.tick();
+                    //std::cout << "定时任务执行\n";
                 }
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
