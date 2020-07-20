@@ -13,6 +13,7 @@
 #include<pthread.h>
 #include<exception>
 #include<semaphore.h>
+#include<functional>
 #include "threadpool.h"
 #include "http_conn.h"
 #include "heap_time.h"
@@ -30,7 +31,7 @@ extern Log_queue back_log_; //日志, 定义在AsyncLog.cpp中
 
 void timer_func(http_conn maturity)
 {
-    printf("定时器回调函数执行\n");
+    //std::cout << "刷新日志函数执行\n";
 }
 
 //信号处理函数,所有线程也会调用该信号处理。
@@ -73,7 +74,8 @@ int main(int argc, char *argv[])
     //预先分配定时器类对象
     std::vector<heap_timer> time_;
     time_.reserve(MAX_FD);
-
+    //主线程的工作日志
+    Log main_log_;
 
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
