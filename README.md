@@ -7,6 +7,8 @@
 - 支持优雅关闭
 - 时间堆定时器
 - 服务器有读写BUFFER
+- 保活机制 keepalive
+- 状态机解析HTTP协议
 - Fast_cgi服务器和web服务器进行交互
 
 ### web服务器中代码简要分析
@@ -37,9 +39,7 @@
 ```
 父进程通过管道将新连接发送给子进程。
 
-- 每个子进程都有自己的epoll来监听该子进程上的所有套接字，子进程先将与父进程通信的管道加入到epoll中，确保和父进程正常通信。
-
-
+- 每个子进程都有自己的epoll来监听该子进程上的套接字，子进程先将与父进程通信的管道加入到epoll中，确保和父进程正常通信。
 - 引入该服务器是为了在处理动态页面是交给Fast_Cgi服务器进行处理,让web服务器只需要处理简单的静态页面，提高web服务器的效率。
 - 服务器采用异步的方式来接收Fast_Cgi服务器返回的内容
 ```cpp
@@ -51,6 +51,9 @@
 
 - Epoll怎么确定该套接字是新的web连接还是fast_cgi返回的内容?
 采用类中添加一个flag标志位，新的连接会将该标志位设为true，而我们的fast_cgi的套接字是false来解决。
+
+#### mmap
+    当分析完http请求后，解析出文件名，将需要访问的文件用mmap建立内存映射来直接读取。减少访问磁盘的消耗，提高效率。
 
 #### 服务器采用时间堆定时器来处理超时事件
 - 时间堆用优先队列来设计。
@@ -75,7 +78,7 @@ void Log_queue::work();
 - 在日志线程中，当缓冲区到达该写入文件的临界点时，我们创建一个临时对象，用std::swap交换，可以减小锁的粒度，而不用等待将所有数据写到文件中再解锁。
 ```cpp
         mutex.lock();
-        while(backend_buffer_len < MAX_BACKEND_LEN)
+        while(work_queue.empty())
         {
             cond.wait();
         }
@@ -85,3 +88,12 @@ void Log_queue::work();
         mutex.unlock();
 ```
 
+
+### 如何安装使用
+下载源码：然后进入到c++11_web_ser 执行make
+./webserver 就可以执行服务器
+浏览器如何访问： http://127.0.0.1:10086/index.html
+
+fast_cgi 安装
+g++ my_serve.cpp -o fast_cgi
+./fast_cgi 就可以执行fast_cgi服务器
