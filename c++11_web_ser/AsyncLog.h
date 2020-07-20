@@ -26,12 +26,11 @@ public:
     };
     
     void add_log(const std::string&);
-
+    void flush_log();
 private: 
-
     std::vector<std::string> log_buffer;     
     int buffer_len;
-    static int MAX_LOG;
+    static const int MAX_LOG;
 };
 
 class Log_queue
@@ -51,13 +50,13 @@ public:
     
     bool OpenFile();
     
+    void flush();
+
     void exit_log()
     {
         flag = false;
     }
 private:  
-    
-
     std::queue<std::vector<std::string>> work_queue;
     mutable std::mutex mutex_;
     std::condition_variable cond_;
