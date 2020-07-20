@@ -11,6 +11,7 @@
 #include<thread>
 #include<mutex>
 #include<condition_variable>
+#include "AsyncLog.h"
 //线程池类,将它定义为模板类是为了代码复用。模板参数T是任务类
 template<typename T>
 class threadpool
@@ -77,8 +78,6 @@ bool threadpool<T>::append(T* request)
         return false;
     }
     m_workqueue.push_back(request);
-    std::cout << "任务加入成功\n";
-    std::cout << "任务队列中任务数目： " <<m_workqueue.size() << "\n";
     m.unlock();
     cond.notify_one();   //唤醒一个线程 
     
@@ -96,6 +95,8 @@ void* threadpool<T>::worker(void* arg)
 template<typename T>  
 void threadpool<T>::run()
 {
+    //每个工作线程一个日志类
+    Log log;
     while(!m_stop)
     {
         std::unique_lock<std::mutex> lk(m);
@@ -108,7 +109,7 @@ void threadpool<T>::run()
         lk.unlock();
         if(!quest)
             continue;
-        quest->process();
+        quest->process(log);
     }
 }
 #endif
