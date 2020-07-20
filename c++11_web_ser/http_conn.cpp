@@ -12,7 +12,6 @@ const char* error_500_form = "There was an unusual problem serving the requested
 //网站的根目录
 const char* doc_root = "/home/xuexi/unix-/linux-高性能/15/web";
 
-Log front_log;
 
 //将套接字设置成非阻塞
 int setnonblocking(int fd)
@@ -89,6 +88,7 @@ void  http_conn::close_conn(bool real_close)
         m_sockfd = -1;
         m_user_count--; //关闭一个连接，将客户数量减一
     }
+    log_.flush_log();
 }
 //m_epollfd 是static，所有类对象中只有一个实例
 void http_conn::init(int sockfd, const sockaddr_in& addr)
@@ -146,7 +146,7 @@ http_conn::LINE_STATUS http_conn::pares_line()
             那么这次分析没有读到一个完整的行，返回LINE_OPEN以表示还需要继续读取客户数据才能进一步分析*/
             if((m_checked_idx + 1) == m_read_idx)
             {
-                std::cout << "LINE_OPEN 1 \n";
+                //std::cout << "LINE_OPEN 1 \n";
                 return LINE_OPEN;
             }
             //如果下一个字符是'\n',则说明我们成功读取到一个完整的行
@@ -186,7 +186,6 @@ bool http_conn::read()
     while(true)
     {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
-        front_log.add_log("m_readbuf\n");
         //std::cout << "m_readbuf = " << m_read_buf << "\n";
         if(bytes_read == -1)
         {
@@ -217,7 +216,6 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     }
     *m_url++ = '\0';
 
-    //std::cout << "m_url:" << m_url << "\n";
     
     //method存储请求的方法
     char* method = text;
@@ -333,12 +331,10 @@ http_conn::HTTP_CODE http_conn::pares_content(char *text)
 http_conn::HTTP_CODE http_conn::process_read()
 {
     LINE_STATUS line_status = LINE_OK;
-    //LINE_STATUS status;
-    //status = pares_line();
-    //std::cout << "pares_line status = " << status << "\n";
     HTTP_CODE ret = NO_REQUEST;
     char *text = 0;
-    while( ( (m_check_state == CHECK_STATE_CONTENT) && (line_status == LINE_OK) ) || ( (line_status = pares_line()) == LINE_OK) )
+    while( ( (m_check_state == CHECK_STATE_CONTENT) && (line_status == LINE_OK) ) 
+                || ( (line_status = pares_line()) == LINE_OK) )
     {
         //获取分析请求的一行内容
         text = get_line();
@@ -347,7 +343,6 @@ http_conn::HTTP_CODE http_conn::process_read()
 
         switch (m_check_state)
         {
-           // std::cout << "m_check_state = " << m_check_state << "\n";
             case CHECK_STATE_REQUESTLINE:
             {
                 ret = parse_request_line(text);
@@ -395,12 +390,11 @@ http_conn::HTTP_CODE http_conn::do_request()
     int len = strlen(doc_root);
     //将解析出的网站名复制到网站根目录后
     strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
-    //std::cout << "m_real_file = " << m_real_file << "\n";
     if(http_CGI::cmp_file(m_real_file))
         return FAST_CGI;
     /*
     stat 函数讲解
-    表头文件:    #include <sys/stat.h>
+    表头文件: #include <sys/stat.h>
              #include <unistd.h>
     定义函数:    int stat(const char *file_name, struct stat *buf);
     函数说明:    通过文件名filename获取文件信息，并保存在buf所指的结构体stat中
@@ -448,7 +442,6 @@ bool http_conn::write()
     int temp = 0;
     int bytes_have_send = 0;
     int bytes_to_send = m_write_idx;
-    //std::cout << "m_write_idx = " << m_write_idx << "\n";
     //如果发送缓冲区中无数据，则更新epoll选项，加入EPOLLIN事件
     if(bytes_to_send == 0)
     {
@@ -527,7 +520,6 @@ bool http_conn::add_response(const char *format, ...)
     }
     m_write_idx += len;
     va_end(arg_list);
-    //write();
     return true;
 }
 
@@ -578,6 +570,7 @@ bool http_CGI::fast_cgi(const char *file)
     int connfd = socket(AF_INET, SOCK_STREAM, 0);
     if(connfd < 0)
         return false;
+    setnonblocking(connfd);
     //将fd加入到epoll事件集中进行异步处理
     addfd(http_conn::m_epollfd, connfd, true);
     
@@ -602,7 +595,8 @@ bool http_CGI::fast_cgi(const char *file)
 bool http_CGI::deal_with_CGI(int fd)
 {
     //处理CGI发来的内容
-    printf("cgi服务器运行\n");
+    //printf("cgi服务器运行\n");
+    return true;
 }
 
 bool http_conn::wirte_log(const std::string& mes, Log& log)
@@ -690,8 +684,9 @@ int http_conn::process_write(http_conn::HTTP_CODE ret)
 }
 
 //由于线程池中的工作线程调用，这是处理HTTP请求的入口函数
-void http_conn::process()
+void http_conn::process(Log& log)
 {
+    log_ = log;
     //处理CGI返回的内容
     if(!flag)
     {

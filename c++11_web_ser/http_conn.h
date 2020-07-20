@@ -67,14 +67,19 @@ public:
     };
 public:  
     http_conn () : flag(false), m_read_idx(0){}
-    ~http_conn ()  {}
+    ~http_conn()  
+    {
+        std::cout << "http_conn 析构函数运行\n";
+        //清空日志
+        log_.flush_log();
+    }
 public:  
     //初始化新接受的连接
     void init(int sockfd, const sockaddr_in& addr);
     //关闭连接
     void close_conn(bool real_close = true);
     //处理客户请求
-    void process();
+    void process(Log& log);
     //非阻塞读操作()读取所有数据
     bool read();
     //非阻塞写操作
@@ -86,6 +91,7 @@ public:
     bool have_sockfd() {return flag;}
     //保存CGI连接套接字
     void cgi(int fd) {m_sockfd = fd;}
+
 private:  
     //初始化连接
     void init();
@@ -168,8 +174,7 @@ private:
     //表明本对象中是否有连接
     bool flag;
 
-    //日志类
-    //class Log log;    
+    Log log_;
 };
 
 class http_CGI
