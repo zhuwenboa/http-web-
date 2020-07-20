@@ -22,11 +22,11 @@ class heap_timer
 {
 public: 
     heap_timer() = default;
-    heap_timer(int delay, const http_conn &a) : user_data(a)
+    heap_timer(int delay, const http_conn& a) : user_data(a)
     {
         expire = time(NULL) + delay; 
     }
-    void init(const http_conn &a)
+    void init(const http_conn& a)
     {
         expire = time(NULL) + 5;
         user_data = a;
