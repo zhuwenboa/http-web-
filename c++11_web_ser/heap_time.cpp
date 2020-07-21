@@ -24,7 +24,7 @@ time_heap::time_heap(std::vector<heap_timer> init_array)
 {   
     for(auto i = init_array.begin(); i != init_array.end(); ++i)
     {
-        heap.push(*i);
+        heap.emplace(*i);
     }
 }
 
@@ -32,7 +32,7 @@ void time_heap::add_timer(const heap_timer &timer)
 {
     if(timer.expire <= 0)  
         return;
-    heap.push(timer);
+    heap.emplace(timer);
 }
 
 void time_heap::del_timer(heap_timer timer)
@@ -44,7 +44,6 @@ void time_heap::del_timer(heap_timer timer)
     这将节省真正删除定时器造成的开销，但这样做容易使得堆数组膨胀
     */
     timer.cb_func = nullptr;
-    std::cout << "删除定时器函数运行\n";
 }
 
 void time_heap::tick()
@@ -53,8 +52,6 @@ void time_heap::tick()
     {
         heap_timer tmp = heap.top();
         time_t cur = time(NULL);
-        if(tmp.expire <= 0)
-            break;
         //如果堆顶定时器没到期，则退出循环
         if(tmp.expire > cur)
             break;
