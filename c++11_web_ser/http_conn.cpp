@@ -20,9 +20,7 @@ int setnonblocking(int fd)
     int ret = fcntl(fd, F_SETFL, old_option | O_NONBLOCK);
     if(ret < 0)
     {   
-        //sprintf();
-        //front_log.add_log("fcntl erro\n");
-        //std::cout << "fcntl erro  line is " << __LINE__ << std::endl;
+        std::cout << "fcntl erro  line is " << __LINE__ << std::endl;
     }
     return old_option;
 }
@@ -49,8 +47,7 @@ void modfd(int epollfd, int fd, int ev)
 {    
     epoll_event event;
     event.data.fd = fd;
-    //event.events = ev | EPOLLET | EPOLLRDHUP;
-    event.events = ev | EPOLLRDHUP;
+    event.events = ev | EPOLLET | EPOLLRDHUP;
     int ret = epoll_ctl(epollfd, EPOLL_CTL_MOD, fd,  &event);
 }
 
@@ -72,9 +69,6 @@ bool http_CGI::cmp_file(const char *file)
     }
     const char *temp = &file[flag + 1];
     char buf[128] = {0};
-    //sprintf(buf, "temp_file = %s\n", temp);
-    //front_log.add_log(buf);
-    //std::cout << "temp_file = " << temp << "\n";
     if(strcmp(temp, "php") == 0)
         return true;
     return false;
@@ -88,7 +82,6 @@ void  http_conn::close_conn(bool real_close)
         m_sockfd = -1;
         m_user_count--; //关闭一个连接，将客户数量减一
     }
-    log_.flush_log();
 }
 //m_epollfd 是static，所有类对象中只有一个实例
 void http_conn::init(int sockfd, const sockaddr_in& addr)
@@ -96,12 +89,11 @@ void http_conn::init(int sockfd, const sockaddr_in& addr)
     flag = true;
     m_sockfd = sockfd;
     m_address = addr;
-    //下面两行是为了避免TIME_WAIT状态，仅用于调试，实际使用应去掉
     int reuse = 1;
     //用该函数避免time_wait状态
     setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)); //设置地址重用
     addfd(m_epollfd, sockfd, true);
-    m_user_count++; //客户数量加1
+    m_user_count++; 
 
     init();
 }
@@ -463,7 +455,6 @@ bool http_conn::write()
                 modfd(m_epollfd, m_sockfd, EPOLLOUT);
                 return true;
             }  
-            //std::cout << "写操作出错\n"; 
             unmap();
             return false;
         }

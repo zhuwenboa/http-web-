@@ -68,11 +68,7 @@ public:
 public:  
     http_conn () : flag(false), m_read_idx(0){}
     ~http_conn()  
-    {
-        std::cout << "http_conn 析构函数运行\n";
-        //清空日志
-        log_.flush_log();
-    }
+    {}
 public:  
     //初始化新接受的连接
     void init(int sockfd, const sockaddr_in& addr);
@@ -173,7 +169,7 @@ private:
 
     //表明本对象中是否有连接
     bool flag;
-
+    //当前连接所属线程的日志类，为了防止产生竞争条件
     Log log_;
 };
 
