@@ -98,3 +98,8 @@ bool Log_queue::OpenFile()
     }
     return true;
 }
+
+bool Log_queue::isOpen()
+{
+    return open_;
+}

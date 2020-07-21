@@ -38,7 +38,8 @@ class Log_queue
 public:   
     Log_queue() : 
                   backend_buffer_len(0), 
-                  flag(true)
+                  flag(true),
+                  open_(false)
                   {}
     //删除拷贝构造和拷贝赋值函数
     Log_queue(const Log_queue&)  = delete;
@@ -49,9 +50,7 @@ public:
     void work();
     
     bool OpenFile();
-    
-    void flush();
-
+    bool isOpen();
     void exit_log()
     {
         flag = false;
@@ -63,6 +62,7 @@ private:
     int backend_buffer_len;
     const int MAX_BACKEND_LEN = 20;
     bool flag;
+    bool open_;
     int Logfile_fd;
 };
 
