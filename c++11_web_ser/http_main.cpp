@@ -134,7 +134,6 @@ int main(int argc, char *argv[])
                         exit(1);
                     }
                     //超过最大连接上限
-                    //std::cout << "m_user_count = " << http_conn::m_user_count << "\n";
                     if(http_conn::m_user_count >= MAX_FD)
                     {
                         show_error(connfd, "Internal server busy");
@@ -154,7 +153,7 @@ int main(int argc, char *argv[])
             {
                 if(Timer.TimeRead())
                 {
-                    Timer.tick();
+                    //Timer.tick();
                     //std::cout << "定时任务执行\n";
                 }
             }
@@ -202,7 +201,6 @@ int main(int argc, char *argv[])
             //可写事件
             else if(events[i].events & EPOLLOUT)
             {
-                //std::cout << "写事件触发\n";
                 //根据写的结果，决定是否关闭连接
                 if(!users[fd].write())
                 {
