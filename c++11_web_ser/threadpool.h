@@ -52,7 +52,7 @@ threadpool<T>::threadpool(int thread_number, int max_requests)
     //创建线程池
     p.reserve(thread_number); //先一次扩容
     for(int i = 0; i < thread_number; ++i)
-    {
+    {  
         p.push_back(std::thread(worker, this));
         printf("create %d process \n", i);
         p[i].detach(); //线程分离
@@ -62,7 +62,6 @@ threadpool<T>::threadpool(int thread_number, int max_requests)
 template<typename T>  
 threadpool<T>::~threadpool()
 {
-    //delete [] m_threads;
     m_stop = true;
 }
 
