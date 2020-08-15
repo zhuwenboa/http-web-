@@ -18,6 +18,11 @@
 #include<signal.h>
 #include<assert.h>
 #include<memory>
+
+/*
+因为是模板类，所以必须将函数的实现放在头文件中
+*/
+
 //描述一个子进程的类，m_pid是目标子进程的PID，m_pipefd是父进程和子进程通信用的管道
 class process
 {
@@ -155,13 +160,16 @@ m_listenfd(listenfd), m_process_number(process_number), m_idx(-1), m_stop(false)
             close(m_sub_process[i].m_pipefd[1]);
             continue;
         }
-        else
+        else if(m_sub_process[i].m_pid == 0)
         {
             close(m_sub_process[i].m_pipefd[0]);
             m_idx = i;
             break;
         }
-        
+        else 
+        {
+            //....
+        }
     }
 }
 
@@ -184,6 +192,7 @@ void processpool<T>::setup_sig_pipe()
     addsig(SIGCHLD, sig_handler);
     addsig(SIGTERM, sig_handler);
     addsig(SIGINT, sig_handler);
+    //忽略SIGPIPE信号
     addsig(SIGPIPE, SIG_IGN);
 }
 
@@ -297,8 +306,6 @@ void processpool<T>::run_child()
     delete [] users;
     users = NULL;
     close(pipefd);
-    /*close(m_listenfd)我们将这段话注释掉，以提醒读者：应该由m_listenfd的创建者来关闭该文件描述符(见后文)，
-    既所谓的“对象（比如一个文件描述符，又或者一段内存）由哪个函数创建，就应该由哪个函数销毁”*/
     close(m_epollfd);
 }
 
@@ -368,6 +375,11 @@ void processpool<T>::run_parent()
                         {
                             pid_t pid;
                             int stat;
+                            /*
+                            循环waitpid是因为waitpid一次只能处理一个子进程的死亡，
+                            如果有多个子进程同时死亡那我们只能处理一个，所以需要while循环将其处理完。
+                            WNOHANG是非阻塞的，如果没有子进程消亡则返回0
+                            */
                             while((pid = waitpid(-1, &stat, WNOHANG)) > 0)
                             {
                                 for(int i = 0; i < m_process_number; ++i)
@@ -378,6 +390,7 @@ void processpool<T>::run_parent()
                                         printf("child %d join\n", i);
                                         close(m_sub_process[i].m_pipefd[0]);
                                         m_sub_process[i].m_pid = -1;
+                                        break;
                                     }
                                 }
                             }
@@ -414,7 +427,6 @@ void processpool<T>::run_parent()
             {
                 continue;
             }
-            
         }
     }
     close(m_listenfd); //由创建者关闭这个文件描述符
