@@ -1,6 +1,9 @@
 #include"processpool.h"
 #include<string.h>
 #define port 8888
+#define FILE_LEN 256
+
+
 
 class my_serve
 {
@@ -24,7 +27,6 @@ public:
         while(true)
         {
             ret = recv(m_sockfd, m_readbuf, reset, 0);
-            std::cout << "recv data: " << m_readbuf << std::endl;
             if(reset < 0)
             {
                 std::cout << "发送数据超出缓冲区大小\n";
@@ -59,15 +61,19 @@ public:
         {
             if(m_readbuf[i] == ':')
             {
-                buffer_flag = i; 
+                buffer_flag = i+1; 
                 break;   
             }
         }
         char temp[buffer_flag];
-        memset(temp, '0', buffer_flag);
-        temp[0] = m_readbuf[0];
-        //strncpy(temp, m_readbuf, buffer_flag);
-        printf("temp = %s\n", temp);
+        char m_file[FILE_LEN];
+        memset(m_file, '\0', FILE_LEN);        
+        memset(temp, '\0', buffer_flag);
+        strncpy(temp, m_readbuf, buffer_flag -1);
+        //解析出文件名
+        strncpy(m_file, m_readbuf + buffer_flag, FILE_LEN);
+
+        printf("file_name = %s\n", m_file);
         char *str = "i am fast_cgi's message";
         sprintf(m_writebuf, "%s#%s", temp, str);
         std::cout << "writebuf: " << m_writebuf << "\n";
@@ -96,7 +102,6 @@ int my_serve::m_epollfd = -1;
 int main(int argc, char *argv[])
 {
     int listenfd;
-    
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
