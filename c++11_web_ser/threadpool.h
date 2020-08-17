@@ -17,7 +17,6 @@ template<typename T>
 class threadpool
 {
 public:  
-    /*参数thread_number是线程池中线程的数量，max_requests是请求队列中最多允许的、等待处理请求的数量 */
     threadpool(int thread_number = 8, int max_requests = 10000);
     ~threadpool();
 
@@ -34,7 +33,6 @@ public:
 private:  
     int m_thread_number; //线程池中的线程数
     int m_max_requests; //请求队列中允许的最大请求数
-    //pthread_t* m_threads; //描述线程池的数组，其大小为m_thread_number
     std::list<T*>m_workqueue; //请求队列
     std::vector<std::thread> p; //vector存储线程池
     mutable std::mutex m;                          //锁   
@@ -88,7 +86,6 @@ void* threadpool<T>::worker(void* arg)
 {
     threadpool* pool = (threadpool*)arg;
     pool->run();
-    return pool;
 }
 
 template<typename T>  
