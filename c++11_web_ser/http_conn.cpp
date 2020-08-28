@@ -83,7 +83,7 @@ void  http_conn::close_conn(bool real_close)
         m_user_count--; //关闭一个连接，将客户数量减一
     }
 }
-//m_epollfd 是static，所有类对象中只有一个实例
+
 void http_conn::init(int sockfd, const sockaddr_in& addr)
 {
     flag = true;
@@ -91,7 +91,7 @@ void http_conn::init(int sockfd, const sockaddr_in& addr)
     m_address = addr;
     int reuse = 1;
     //用该函数避免time_wait状态
-    setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)); //设置地址重用
+    //setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)); //设置地址重用
     addfd(m_epollfd, sockfd, true);
     m_user_count++; 
 
@@ -138,7 +138,6 @@ http_conn::LINE_STATUS http_conn::pares_line()
             那么这次分析没有读到一个完整的行，返回LINE_OPEN以表示还需要继续读取客户数据才能进一步分析*/
             if((m_checked_idx + 1) == m_read_idx)
             {
-                //std::cout << "LINE_OPEN 1 \n";
                 return LINE_OPEN;
             }
             //如果下一个字符是'\n',则说明我们成功读取到一个完整的行
@@ -148,7 +147,7 @@ http_conn::LINE_STATUS http_conn::pares_line()
                 m_read_buf[m_checked_idx++] = '\0';
                 return LINE_OK;
             }
-            //否则的话，说明客户发送的HTTP请求存在语法问题
+            //说明客户发送的HTTP请求存在语法问题
             return LINE_BAD;            
         }
         //如果当前的字节是'\n',既换行符，则也说明可能读取到一个完整的行
@@ -163,9 +162,6 @@ http_conn::LINE_STATUS http_conn::pares_line()
             return LINE_BAD;
         }
     }
-    //如果所有内容分析完毕也没遇到\r字符，则返回LINE_OPEN，表示还需要继续读取客户数据才能进一步分析
-    //front_log.add_log("LINE_OPEN \n");
-    //std::cout << "LINE_OPEN 2 \n";
     return LINE_OPEN;
 }
 
@@ -178,7 +174,6 @@ bool http_conn::read()
     while(true)
     {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_idx, READ_BUFFER_SIZE - m_read_idx, 0);
-        //std::cout << "m_readbuf = " << m_read_buf << "\n";
         if(bytes_read == -1)
         {
             if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -189,7 +184,6 @@ bool http_conn::read()
         }
         else if(bytes_read == 0)
         {
-            //std::cout << "有用户断开连接\n";
             return false;
         }
         m_read_idx += bytes_read;
@@ -211,7 +205,6 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     
     //method存储请求的方法
     char* method = text;
-    //std::cout << "method =" << method << "\n";
     //strcasecmp函数，忽略大小写比较字符串
     if(strcasecmp(method, "GET") == 0)
     {
@@ -224,7 +217,6 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     //size_t strspn(const char *s, const char *accept);返回字符串s开头连续包含字符串accept内的数目
     m_url += strspn(m_url, " \t");
     
-    //std::cout << "m_url:" << m_url << "\n";
     
     m_version = strpbrk(m_url, " \t");
     if(!m_version)
@@ -233,7 +225,6 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char* text)
     }
     *m_version++ = '\0';
     m_version += strspn(m_version, " \t");
-    //std::cout << "m_version:" << m_version << "\n";
     if(strcasecmp(m_version, "HTTP/1.1") != 0)
     {
         return BAD_REQUEST;
@@ -385,9 +376,6 @@ http_conn::HTTP_CODE http_conn::do_request()
     if(http_CGI::cmp_file(m_real_file))
         return FAST_CGI;
     /*
-    stat 函数讲解
-    表头文件: #include <sys/stat.h>
-             #include <unistd.h>
     定义函数:    int stat(const char *file_name, struct stat *buf);
     函数说明:    通过文件名filename获取文件信息，并保存在buf所指的结构体stat中
     返回值:      执行成功则返回0，失败返回-1，错误代码存于errno
@@ -433,7 +421,7 @@ bool http_conn::write()
 {
     int temp = 0;
     int bytes_have_send = 0;
-    int bytes_to_send = m_write_idx;
+    int bytes_to_send = m_write_idx + m_iv[1].iov_len;
     //如果发送缓冲区中无数据，则更新epoll选项，加入EPOLLIN事件
     if(bytes_to_send == 0)
     {
@@ -448,7 +436,8 @@ bool http_conn::write()
         if(temp <= -1)
         {
             /*
-            如果TCP写缓冲没有空间，则等待下一轮EPOLLOUT事件。虽然在此期间，服务器无法立即接收到同一个客户的下一个请求，但这可以保证连接的完整性
+            如果TCP写缓冲没有空间，则等待下一轮EPOLLOUT事件。
+            虽然在此期间，服务器无法立即接收到同一个客户的下一个请求，但这可以保证连接的完整性
             */
             if(errno == EAGAIN)
             {
@@ -458,24 +447,31 @@ bool http_conn::write()
             unmap();
             return false;
         }
-
         bytes_have_send += temp;
-        //响应发送完成
-        if(bytes_to_send <= bytes_have_send)
+        bytes_to_send -= temp;
+        if(bytes_have_send >= m_iv[0].iov_len)
         {
-            //发送HTTP响应成功，根据HTTP请求中的Connection字段决定是否立即关闭
-            //std::cout << "发送HTPP响应成功\n";
+            m_iv[0].iov_len = 0;
+            m_iv[1].iov_base = m_file_address + (bytes_have_send - m_write_idx);
+            m_iv[1].iov_len = bytes_to_send;
+        }
+        else 
+        {
+            m_iv[0].iov_len -= bytes_have_send;
+            m_iv[0].iov_base = m_write_buf + bytes_have_send;
+        }
+        //响应发送完成
+        if(bytes_to_send <= 0)
+        {
             unmap();
+            modfd(m_epollfd, m_sockfd, EPOLLIN);
             if(m_linger)
             {
                 init();
-                modfd(m_epollfd, m_sockfd, EPOLLIN);
                 return true;
             }
             else
             {
-                //modfd(m_epollfd, m_sockfd, EPOLLIN);
-                //如果不持续连接，返回false，让主函数判断关闭该连接
                 return false;        
             }            
         }
@@ -483,7 +479,6 @@ bool http_conn::write()
 }
 
 //往写缓冲区写入待发送的数据
-//const char *format相当于格式化参数,在可变函数中，必须要有一个固定的参数
 bool http_conn::add_response(const char *format, ...)
 {
     //写缓冲区待发送的数据大于写缓冲区，返回错误
@@ -507,6 +502,7 @@ bool http_conn::add_response(const char *format, ...)
 
     if(len >= (WRITE_BUFFER_SIZE - 1- m_write_idx))
     {
+        va_end(arg_list);
         return false;
     }
     m_write_idx += len;
@@ -521,9 +517,14 @@ bool http_conn::add_status_line(int status, const char *title)
 
 bool http_conn::add_headers(int content_len)
 {
-    add_content_length(content_len);
-    add_linger();
-    add_blank_line();
+    return add_content_length(content_len) 
+           && add_linger() 
+           && add_blank_line();
+}
+
+bool http_conn::add_content_type()
+{
+    return add_response("Content-Type:%s\r\n", "index/html");
 }
 
 bool http_conn::add_content_length(int content_len)
@@ -550,7 +551,6 @@ bool http_conn::add_content(const char *content)
 //异步CGI 
 bool http_CGI::fast_cgi(const char *file)
 {
-    //std::cout << "fast_cgi运行\n";
     char writebuf[1024] = {0};
     char *ip = "127.0.0.1";
     int port = 8888;
@@ -579,14 +579,15 @@ bool http_CGI::fast_cgi(const char *file)
         removefd(http_conn::m_epollfd, connfd);
         return false; 
     }
-    //std::cout << "fast_Cgi 发送完成\n";
     return true;
 }
 
 bool http_CGI::deal_with_CGI(int fd)
 {
     //处理CGI发来的内容
-    //printf("cgi服务器运行\n");
+    /*
+        ...
+    */
     return true;
 }
 
