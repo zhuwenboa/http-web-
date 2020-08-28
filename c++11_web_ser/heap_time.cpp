@@ -55,7 +55,7 @@ void time_heap::tick()
         //如果堆顶定时器没到期，则退出循环
         if(tmp.expire > cur)
             break;
-        //否则就执行堆顶定时器的任务
+        //执行堆顶定时器的任务
         if(tmp.cb_func)
             tmp.cb_func(tmp.user_data);
         //将堆顶元素删除，同时生成新的定时器(array[0])
