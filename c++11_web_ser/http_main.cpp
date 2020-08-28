@@ -23,7 +23,6 @@
 #define MAX_EVENT_NUMBER 10000
 #define PORT 10086
 
-//addfd和removefd在http.conn.cpp中定义，所以需要再次加extern关键字进行声明
 extern int addfd(int epollfd, int fd, bool one_shot);
 extern int removefd(int epollfd, int fd);
 
@@ -59,7 +58,7 @@ int main(int argc, char *argv[])
     //忽略SIGPIPE信号
     addsig(SIGPIPE, SIG_IGN);
     //初始化线程池，启动工作线程
-    threadpool<http_conn>* pool = new threadpool<http_conn>(6);
+    threadpool<http_conn>* pool = new threadpool<http_conn>(6, 100000);
 
     //启动日志线程
     std::thread log_thread(Log_queue::run, &back_log_);
@@ -154,7 +153,6 @@ int main(int argc, char *argv[])
                 if(Timer.TimeRead())
                 {
                     //Timer.tick();
-                    //std::cout << "定时任务执行\n";
                 }
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
@@ -194,7 +192,7 @@ int main(int argc, char *argv[])
                     else
                     {
                         users[fd].close_conn();
-                        //printf("CGI关闭连接\n");
+                        Timer.del_timer(time_[fd]);
                     }
                 }   
             }   
@@ -204,12 +202,16 @@ int main(int argc, char *argv[])
                 //根据写的结果，决定是否关闭连接
                 if(!users[fd].write())
                 {
+                    Timer.del_timer(time_[fd]);
                     users[fd].close_conn();
                 }
             }
             else
             {
-                std::cout << "未知响应\n";   
+                Timer.del_timer(time_[fd]);
+                users[fd].close_conn();
+                std::cout << "未知响应\n";
+
             }
         }
     }   
