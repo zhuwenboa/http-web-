@@ -19,29 +19,13 @@
 
 
 #### 在web服务器中引入了Fast_cgi服务器
+- https://zh.wikipedia.org/wiki/FastCGI 维基百科
 - Fast_cgi用进程池实现，主进程监听listenfd采用Round_Robin算法来将连接分配给子进程。
-```cpp
-                int i = sub_process_counter;
-                do
-                {
-                    if(m_sub_process[i].m_pid != -1)
-                        break;
-                    i = (i + 1)% m_process_number;
-                } while (i != sub_process_counter);
-                
-                if(m_sub_process[i].m_pid == -1)
-                {
-                    m_stop = true;
-                    break;
-                }
-                sub_process_counter = (i + 1)%m_process_number
-
-```
 父进程通过管道将新连接发送给子进程。
 
 - 每个子进程都有自己的epoll来监听该子进程上的套接字，子进程先将与父进程通信的管道加入到epoll中，确保和父进程正常通信。
 - 引入该服务器是为了在处理动态页面是交给Fast_Cgi服务器进行处理,让web服务器只需要处理简单的静态页面，提高web服务器的效率。
-- 服务器采用异步的方式来接收Fast_Cgi服务器返回的内容
+###### 服务器采用异步的方式来接收Fast_Cgi服务器返回的内容
 ```cpp
     //将connfd加入到epoll事件集中进行异步处理
     addfd(http_conn::m_epollfd, connfd, true)
@@ -90,10 +74,10 @@ void Log_queue::work();
 
 
 ### 如何安装使用
-下载源码：然后进入到c++11_web_ser 执行make
-./webserver 就可以执行服务器
-浏览器如何访问： http://127.0.0.1:10086/index.html
+- 下载源码：然后进入到c++11_web_ser 执行make
+- ./webserver 就可以执行服务器
+- 浏览器如何访问： http://127.0.0.1:10086/index.html
 
-fast_cgi 安装
-g++ my_serve.cpp -o fast_cgi
-./fast_cgi 就可以执行fast_cgi服务器
+- fast_cgi 安装
+- g++ my_serve.cpp -o fast_cgi
+- ./fast_cgi 就可以执行fast_cgi服务器
