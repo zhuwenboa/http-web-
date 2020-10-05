@@ -50,9 +50,10 @@ public:
         BAD_REQUEST, //客户请求有语法错误
         NO_RESOURCE, //不能提供所请求的服务
         FORBIDDEN_REQUEST, //客户对资源没有足够的访问权限
-        FILE_REQUEST, 
+        FILE_REQUEST,       //文件可以读取
         INTERNAL_ERROR, //服务器内部错误
-        CLOSED_CONNECTION //客户端已经关闭连接
+        CLOSED_CONNECTION, //客户端已经关闭连接
+        FAST_CGI           //需要访问CGI服务器进行解析
     };
 
     //行的读取状态
@@ -63,7 +64,7 @@ public:
         LINE_OPEN //行数据尚且不完整
     };
 public:  
-    http_conn () {}
+    http_conn () : flag(false){}
     ~http_conn ()  {}
 
 public:  
@@ -74,17 +75,20 @@ public:
     //处理客户请求
     void process();
     //非阻塞读操作()读取所有数据
-    int read();
+    bool read();
     //非阻塞写操作
     bool write();
-
+    //声明问友元
+    friend class http_CGI;
+    //判断类中是否有连接
+    bool have_sockfd() {return flag;}
 private:  
     //初始化连接
     void init();
     //解析http请求
     HTTP_CODE process_read();
     //填充http应答
-    bool process_write(HTTP_CODE ret);
+    int process_write(HTTP_CODE ret);
 
     //下面这一组函数被process_read调用以分析http请求
     HTTP_CODE parse_request_line(char* text);
@@ -93,11 +97,6 @@ private:
     HTTP_CODE do_request();
     char* get_line() {return m_read_buf + m_start_line;}
     LINE_STATUS pares_line();
-
-    //访问CGI服务器进行解析
-    bool fast_cgi();
-    //对请求的文件进行解析，判断是否为动态文件
-    bool cmp_file();
 
     //下面这一组函数被process_write调用以填充http应答
     void unmap();
@@ -161,16 +160,20 @@ private:
     //我们将采用writev来执行写操作，所以定义下面两个成员，其中m_iv_count标识被写内存块的数量
     struct iovec m_iv[2];
     int m_iv_count;
+
+    //表明本对象中是否有连接
+    bool flag;
 };
 
 class http_CGI
 {
 public:  
-    http_CGI() : m_connfd(-1), http_sockfd(-1) {}
-    
-    static std::map<int, http_CGI>cgi_conn;
-    int m_connfd;  //请求CGI的fd
-    int http_sockfd; //请求web服务器的fd
+    //访问CGI服务器进行解析
+    static bool fast_cgi(const char *file);
+    //对请求的文件进行解析，判断是否为动态文件
+    static bool cmp_file(const char *file);
+    //处理CGI服务器返回的信息
+    static bool deal_with_CGI(int fd);
 };
 
 

@@ -18,7 +18,6 @@
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
 #define PORT 10086
-//const int MAX_CGI_FD = 20;
 
 extern int addfd(int epollfd, int fd);
 extern int removefd(int epollfd, int fd);
@@ -52,11 +51,7 @@ int main(int argc, char *argv[])
     //预先为每个可能的客户连接分配一个http_conn对象
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
-    /*
-    //预先为可能请求CGI服务器连接分配一个http_CGI对象
-    http_CGI *cgi_conn = new http_CGI[MAX_CGI_FD];
-    assert(cgi_conn);
-    */
+
     int listenfd = socket(AF_INET, SOCK_STREAM, 0);
     assert(listenfd >= 0);
     struct linger tmp = {1, 0}; //避免time_wait状态，断开连接时发送RST分节断开。
@@ -83,9 +78,7 @@ int main(int argc, char *argv[])
 
     while(true)
     {
-        printf("-----\n");
         int cond = epoll_wait(epollfd, events, MAX_EVENT_NUMBER, -1);
-        printf("=======\n");
         if((cond < 0) && (errno != EINTR))
         {
             printf("epoll failure\n");
@@ -113,7 +106,6 @@ int main(int argc, char *argv[])
                             exit(1);
                         }
                     }
-                    printf("有新的连接%d到来\n", connfd);
                     //超过最大连接上限
                     if(http_conn::m_user_count >= MAX_FD)
                     {
@@ -132,26 +124,25 @@ int main(int argc, char *argv[])
             //可读事件
             else if(events[i].events & EPOLLIN)
             {
-                std::cout << "可读事件触发\n";
-                
-                //根据读的结果，来决定下一步操作
-                int ret = users[fd].read();
-                //浏览器发来的请求
-                if(ret == 1)
+                if(users[fd].have_sockfd())
                 {
-                    users[fd].process();    //单线程模型
+                    //根据读的结果，来决定下一步操作
+                    int ret = users[fd].read();
+                    //浏览器发来的请求
+                    if(ret == true)
+                    {
+                        users[fd].process();    //单线程模型
+                    }
+                    else
+                    {
+                        users[fd].close_conn();
+                    }
                 }
-                //CGI返回的内容
-                if(ret == 2)
+                //CGI发送的内容
+                else 
                 {
-
-                }    
-                else if(ret == -1)
-                {
-                    users[fd].close_conn();
+                    http_CGI::deal_with_CGI(fd);
                 }
-                
-                
             }
             //可写事件
             else if(events[i].events & EPOLLOUT)
