@@ -47,7 +47,7 @@ void modfd(int epollfd, int fd, int ev)
 {    
     epoll_event event;
     event.data.fd = fd;
-    event.events = ev | EPOLLET | EPOLLRDHUP;
+    event.events = ev | EPOLLET | EPOLLRDHUP | EPOLLONESHOT;
     int ret = epoll_ctl(epollfd, EPOLL_CTL_MOD, fd,  &event);
 }
 
@@ -89,7 +89,7 @@ void http_conn::init(int sockfd, const sockaddr_in& addr)
     flag = true;
     m_sockfd = sockfd;
     m_address = addr;
-    int reuse = 1;
+    //int reuse = 1;
     //用该函数避免time_wait状态
     //setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse)); //设置地址重用
     addfd(m_epollfd, sockfd, true);
@@ -117,7 +117,7 @@ void http_conn::init()
     memset(m_real_file, 0, sizeof(m_real_file));
 }
 
-//分析htpp每一行
+//分析http每一行
 http_conn::LINE_STATUS http_conn::pares_line()
 {
     char temp;
@@ -308,6 +308,7 @@ http_conn::HTTP_CODE http_conn::pares_content(char *text)
         text[m_content_length] = '\0';
         return GET_REQUEST;
     }
+    return NO_REQUEST;
 }
 
 //主状态机。
