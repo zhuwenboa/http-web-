@@ -54,25 +54,6 @@ void modfd(int epollfd, int fd, int ev)
 int http_conn::m_user_count = 0;
 int http_conn::m_epollfd = 0;
 
-bool http_CGI::cmp_file(const char *file)
-{
-    int len = strlen(file);
-    int flag;
-    //取出文件的后缀文件格式
-    for(int i = len - 1; i >= 0; --i)
-    {
-        if(file[i] == '.')
-        {
-            flag = i;
-            break;
-        }
-    }
-    const char *temp = &file[flag + 1];
-    char buf[128] = {0};
-    if(strcmp(temp, "php") == 0)
-        return true;
-    return false;
-}
 
 void  http_conn::close_conn(bool real_close)
 {
@@ -112,6 +93,7 @@ void http_conn::init()
     m_checked_idx = 0;
     m_read_idx = 0;
     m_write_idx = 0;
+    log_ = NULL;
     memset(m_read_buf, 0, sizeof(m_read_buf));
     memset(m_write_buf, 0, sizeof(m_write_buf));
     memset(m_real_file, 0, sizeof(m_real_file));
@@ -547,51 +529,6 @@ bool http_conn::add_content(const char *content)
     return add_response("%s", content);
 }
 
-
-
-//异步CGI 
-bool http_CGI::fast_cgi(const char *file)
-{
-    char writebuf[1024] = {0};
-    char *ip = "127.0.0.1";
-    int port = 8888;
-    struct sockaddr_in addr;
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    addr.sin_addr.s_addr = inet_addr(ip);
-    int connfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(connfd < 0)
-        return false;
-    setnonblocking(connfd);
-    //将fd加入到epoll事件集中进行异步处理
-    addfd(http_conn::m_epollfd, connfd, true);
-    
-    sprintf(writebuf, "%d:%s", connfd, file);
-    //连接CGI服务器
-    int ret = connect(connfd, (sockaddr*)&addr, sizeof(addr));
-    if(ret < 0)
-        return false;
-
-    //给CGI服务器发送需要解析的文件
-    ret = send(connfd, writebuf, sizeof(writebuf), 0);
-    //如果发送失败，则将connfd从epoll中删除
-    if(ret < 0)
-    {
-        removefd(http_conn::m_epollfd, connfd);
-        return false; 
-    }
-    return true;
-}
-
-bool http_CGI::deal_with_CGI(int fd)
-{
-    //处理CGI发来的内容
-    /*
-        ...
-    */
-    return true;
-}
-
 bool http_conn::wirte_log(const std::string& mes, Log& log)
 {
     log.add_log(std::move(mes));
@@ -677,7 +614,7 @@ int http_conn::process_write(http_conn::HTTP_CODE ret)
 }
 
 //由于线程池中的工作线程调用，这是处理HTTP请求的入口函数
-void http_conn::process(Log& log)
+void http_conn::process(Log* log)
 {
     log_ = log;
     //处理CGI返回的内容
@@ -710,6 +647,70 @@ void http_conn::process(Log& log)
         modfd(m_epollfd, m_sockfd, EPOLLIN);
         return;
     }
+    log_ = NULL;
 }
 
+
+bool http_CGI::cmp_file(const char *file)
+{
+    int len = strlen(file);
+    int flag;
+    //取出文件的后缀文件格式
+    for(int i = len - 1; i >= 0; --i)
+    {
+        if(file[i] == '.')
+        {
+            flag = i;
+            break;
+        }
+    }
+    const char *temp = &file[flag + 1];
+    char buf[128] = {0};
+    if(strcmp(temp, "php") == 0)
+        return true;
+    return false;
+}
+
+//异步CGI 
+bool http_CGI::fast_cgi(const char *file)
+{
+    char writebuf[1024] = {0};
+    char *ip = "127.0.0.1";
+    int port = 8888;
+    struct sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+    addr.sin_addr.s_addr = inet_addr(ip);
+    int connfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(connfd < 0)
+        return false;
+    setnonblocking(connfd);
+    //将fd加入到epoll事件集中进行异步处理
+    addfd(http_conn::m_epollfd, connfd, true);
+    
+    sprintf(writebuf, "%d:%s", connfd, file);
+    //连接CGI服务器
+    int ret = connect(connfd, (sockaddr*)&addr, sizeof(addr));
+    if(ret < 0)
+        return false;
+
+    //给CGI服务器发送需要解析的文件
+    ret = send(connfd, writebuf, sizeof(writebuf), 0);
+    //如果发送失败，则将connfd从epoll中删除
+    if(ret < 0)
+    {
+        removefd(http_conn::m_epollfd, connfd);
+        return false; 
+    }
+    return true;
+}
+
+bool http_CGI::deal_with_CGI(int fd)
+{
+    //处理CGI发来的内容
+    /*
+        ...
+    */
+    return true;
+}
 

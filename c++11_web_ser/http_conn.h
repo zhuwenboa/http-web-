@@ -20,6 +20,7 @@
 #include<sys/uio.h>
 #include<map>
 #include"AsyncLog.h"
+
 class http_CGI;  //访问CGI服务器类声明
 
 class http_conn
@@ -75,7 +76,7 @@ public:
     //关闭连接
     void close_conn(bool real_close = true);
     //处理客户请求
-    void process(Log& log);
+    void process(Log* log);
     //非阻塞读操作()读取所有数据
     bool read();
     //非阻塞写操作
@@ -171,8 +172,9 @@ private:
     //表明本对象中是否有连接
     bool flag;
     //当前连接所属线程的日志类，为了防止产生竞争条件
-    Log log_;
+    Log* log_;
 };
+
 
 class http_CGI
 {
