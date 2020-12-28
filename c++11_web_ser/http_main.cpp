@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
             {
                 if(Timer.TimeRead())
                 {
-                    //Timer.tick();
+                    Timer.tick();
                 }
             }
             else if(events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
