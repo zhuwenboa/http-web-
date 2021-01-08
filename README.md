@@ -16,6 +16,7 @@
 #### web服务器主框架
 - 主线程epoll+线程池处理任务的Reactor事件驱动模型
 - Epoll采用ET模式
+- 加入了epolloneshot机制， 确保套接字不会同时被多个线程处理
 
 
 #### 在web服务器中引入了Fast_cgi服务器
@@ -54,6 +55,7 @@
 - 日志采用前后端分离的异步日志
 - 工作线程有自己的一个缓冲buffer，每个工作线程先向工作buffer中写，当写到一定数量然后加入的日志队列中，有专门的日志线程读取并写入磁盘。
 - 采用该方法可以避免每个线程都需要往磁盘中写，增加IO时间开销，由专门的IO线程去写入磁盘。
+- 不用为每个连接建立Log类，而是将工作线程的Log类复制给当前处理的连接。
 ```cpp
 void Log_queue::append(std::vector<std::string>& messages);
 void Log_queue::work();
@@ -72,6 +74,11 @@ void Log_queue::work();
         mutex.unlock();
 ```
 
+#### webbench压测
+/home/xuexi/图片/webbench.png
+
+- CPU使用情况
+/home/xuexi/图片/2021-01-08 17-24-06屏幕截图.png
 
 ### 如何安装使用
 - 下载源码：然后进入到c++11_web_ser 执行make
