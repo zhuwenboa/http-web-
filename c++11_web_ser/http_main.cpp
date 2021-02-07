@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
     //忽略SIGPIPE信号
     addsig(SIGPIPE, SIG_IGN);
     //初始化线程池，启动工作线程
-    threadpool<http_conn>* pool = new threadpool<http_conn>(6, 100000);
+    threadpool<http_conn>* pool = new threadpool<http_conn>(6, 10000);
 
     //启动日志线程
     std::thread log_thread(Log_queue::run, &back_log_);
@@ -169,7 +169,6 @@ int main(int argc, char *argv[])
                     //根据读的结果，决定是将任务添加到线程池，还是关闭连接
                     if(users[fd].read())
                     {
-                        //std::cout << "将任务加入到工作队列中\n";
                         pool->append(&users[fd]);
                         //更新定时器
                         time_[fd].retime();
