@@ -404,7 +404,11 @@ bool http_conn::write()
 {
     int temp = 0;
     int bytes_have_send = 0;
-    int bytes_to_send = m_write_idx + m_iv[1].iov_len;
+    int bytes_to_send;
+    if(m_iv_count == 1)
+        bytes_to_send = m_write_idx;
+    else 
+        bytes_to_send = m_write_idx + m_iv[1].iov_len;
     //如果发送缓冲区中无数据，则更新epoll选项，加入EPOLLIN事件
     if(bytes_to_send == 0)
     {
@@ -432,17 +436,6 @@ bool http_conn::write()
         }
         bytes_have_send += temp;
         bytes_to_send -= temp;
-        if(bytes_have_send >= m_iv[0].iov_len)
-        {
-            m_iv[0].iov_len = 0;
-            m_iv[1].iov_base = m_file_address + (bytes_have_send - m_write_idx);
-            m_iv[1].iov_len = bytes_to_send;
-        }
-        else 
-        {
-            m_iv[0].iov_len -= bytes_have_send;
-            m_iv[0].iov_base = m_write_buf + bytes_have_send;
-        }
         //响应发送完成
         if(bytes_to_send <= 0)
         {
@@ -458,6 +451,34 @@ bool http_conn::write()
                 return false;        
             }            
         }
+        if(bytes_have_send >= m_write_idx)
+        {
+            m_iv[0].iov_len = 0;
+            m_iv[1].iov_base = m_file_address + (bytes_have_send - m_write_idx);
+            m_iv[1].iov_len = bytes_to_send;
+        }
+        else 
+        {
+            m_iv[0].iov_len -= bytes_have_send;
+            m_iv[0].iov_base = m_write_buf + bytes_have_send;
+        }
+        /*
+        //响应发送完成
+        if(bytes_to_send <= 0)
+        {
+            unmap();
+            modfd(m_epollfd, m_sockfd, EPOLLIN);
+            if(m_linger)
+            {
+                init();
+                return true;
+            }
+            else
+            {
+                return false;        
+            }            
+        }
+        */
     }
 }
 
@@ -542,7 +563,6 @@ int http_conn::process_write(http_conn::HTTP_CODE ret)
     {
         case INTERNAL_ERROR:
         {
-            
             add_status_line(500, error_500_title);
             add_headers(strlen(error_500_form));
             if(!add_content(error_500_form))
