@@ -384,7 +384,7 @@ http_conn::HTTP_CODE http_conn::do_request()
         perror("open file erro");
     }
     //用mmap将文件映射到内存中，用mmap将文件映射到内存中，减少拷贝次数，直接进行发送
-    m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    m_file_address = (char*)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
     return FILE_REQUEST;
 }
@@ -462,23 +462,6 @@ bool http_conn::write()
             m_iv[0].iov_len -= bytes_have_send;
             m_iv[0].iov_base = m_write_buf + bytes_have_send;
         }
-        /*
-        //响应发送完成
-        if(bytes_to_send <= 0)
-        {
-            unmap();
-            modfd(m_epollfd, m_sockfd, EPOLLIN);
-            if(m_linger)
-            {
-                init();
-                return true;
-            }
-            else
-            {
-                return false;        
-            }            
-        }
-        */
     }
 }
 
