@@ -105,7 +105,7 @@ void threadpool<T>::run()
         lk.unlock();
         if(!quest)
             continue;
-        quest->process(log);
+        quest->process(&log);
     }
 }
 #endif
