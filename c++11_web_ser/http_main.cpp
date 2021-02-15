@@ -124,7 +124,6 @@ int main(int argc, char *argv[])
                 while(true)
                 {
                     int connfd = accept(listenfd, (sockaddr*)&cli_addr, &cli_len);
-                    //printf("有新的连接%d到来\n", connfd);
                     if(connfd < 0)
                     {
                         if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -188,11 +187,8 @@ int main(int argc, char *argv[])
                         //printf("CGI发来请求\n");
                         pool->append(&users[fd]);
                     }
-                    else
-                    {
-                        users[fd].close_conn();
-                        Timer.del_timer(time_[fd]);
-                    }
+                    users[fd].close_conn();
+                    Timer.del_timer(time_[fd]);
                 }   
             }   
             //可写事件
