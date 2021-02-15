@@ -38,7 +38,7 @@ void addfd(int epollfd, int fd, bool oneshot)
 //关闭连接
 void removefd(int epollfd, int fd)
 {
-    epoll_ctl(epollfd, EPOLL_CTL_DEL, fd,  0);
+    epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, 0);
     close(fd);
 }
 
@@ -47,8 +47,8 @@ void modfd(int epollfd, int fd, int ev)
 {    
     epoll_event event;
     event.data.fd = fd;
-    event.events = ev | EPOLLET | EPOLLRDHUP | EPOLLONESHOT;
-    int ret = epoll_ctl(epollfd, EPOLL_CTL_MOD, fd,  &event);
+    event.events =  ev | EPOLLET | EPOLLRDHUP | EPOLLONESHOT;
+    int ret = epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
 }
 
 int http_conn::m_user_count = 0;
@@ -420,7 +420,7 @@ bool http_conn::write()
     while(1)
     {
         temp = writev(m_sockfd, m_iv, m_iv_count);
-        if(temp <= -1)
+        if(temp < 0)
         {
             /*
             如果TCP写缓冲没有空间，则等待下一轮EPOLLOUT事件。
@@ -623,7 +623,7 @@ void http_conn::process(Log* log)
     //处理CGI返回的内容
     if(!flag)
     {
-        http_CGI::deal_with_CGI(m_sockfd);
+        http_CGI::deal_with_CGI(m_sockfd);\
         return;
     }
     HTTP_CODE read_ret = process_read();
