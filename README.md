@@ -14,7 +14,7 @@
 ### web服务器中代码简要分析
 
 #### web服务器主框架
-- 主线程epoll+线程池处理任务的Reactor事件驱动模型
+- 主线程epoll+线程池处理任务的Proactor事件驱动模型
 - Epoll采用ET模式
 - 加入了epolloneshot机制， 确保套接字不会同时被多个线程处理
 
