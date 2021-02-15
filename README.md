@@ -74,11 +74,8 @@ void Log_queue::work();
         mutex.unlock();
 ```
 
-#### webbench压测
-/home/xuexi/图片/webbench.png
 
-- CPU使用情况
-/home/xuexi/图片/2021-01-08 17-24-06屏幕截图.png
+
 
 ### 如何安装使用
 - 下载源码：然后进入到c++11_web_ser 执行make
