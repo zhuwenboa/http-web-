@@ -52,6 +52,7 @@ public:
     ~processpool()
     {
         delete []m_sub_process;
+        m_instance = NULL;
     }
 
     //启动进程池
@@ -105,7 +106,7 @@ static void addfd(int epollfd, int fd)
 {
     epoll_event event;
     event.data.fd = fd;
-    event.events = EPOLLIN | EPOLLET;
+    event.events = EPOLLIN || EPOLLET;
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
     setnonblocking(fd);
 }
@@ -246,16 +247,21 @@ void processpool<T>::run_child()
                 {
                     struct sockaddr_in client_address;
                     socklen_t client_len = sizeof(client_address);
-                    int connfd = accept(m_listenfd, (struct sockaddr*)&client_address, &client_len);
-                    if(connfd < 0)
+                    while(true)
                     {
-                        std::cout << "errno is " << errno <<"\n";
-                        continue;
-                    }
-                    addfd(m_epollfd, connfd);
+                        int connfd = accept(m_listenfd, (struct sockaddr*)&client_address, &client_len);
+                        if(connfd < 0)
+                        {
+                            if(errno == EAGAIN || errno == EWOULDBLOCK)
+                                break;
+                            std::cout << "errno is " << errno <<"\n";
+                            break;
+                        }
+                        addfd(m_epollfd, connfd);
                     /*模板类T必须实现init方法，以初始化一个客户连接。
                     我们直接使用connfd来索引逻辑处理对象（T类型的对象），以提高程序效率*/
-                    users[connfd].init(m_epollfd, connfd, client_address);
+                        users[connfd].init(m_epollfd, connfd, client_address);
+                    }
                 }
             }
             //处理信号
